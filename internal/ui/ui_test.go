@@ -239,8 +239,14 @@ func TestTicketCannedResponseExpandsAndPosts(t *testing.T) {
 	tk := newTicket(store, agent, "T-1")
 	live := shuttle.Test(t, tk)
 
-	live.Click("#shuttle-c-canned-Reassure")
-	live.Assert().TextContains("body", "Preview: Reassure")
+	if err := tk.previewCanned("Reassure")(context.Background()); err != nil {
+		t.Fatalf("previewCanned: %v", err)
+	}
+	if err := live.Session().Push(context.Background()); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	live.Patches()
+	live.Assert().TextContains("dialog", "Preview: Reassure")
 
 	expected := "Hi Northwind,\n\nThanks for the report about SSO login loops. I’m checking it now and will update you shortly.\n\nBest,\nNadia Okafor"
 	live.Signal("draft", expected).Click("#shuttle-c-post")
@@ -254,6 +260,26 @@ func TestTicketCannedResponseExpandsAndPosts(t *testing.T) {
 	}
 	if comments[0].Body != expected {
 		t.Fatalf("comment body %q, want %q", comments[0].Body, expected)
+	}
+}
+
+func TestTicketInsertIntoDraftFromCannedResponse(t *testing.T) {
+	store := storeWith(t, desk.Ticket{Subject: "SSO login loops", Customer: "Northwind"})
+
+	tk := newTicket(store, agent, "T-1")
+	live := shuttle.Test(t, tk)
+
+	if err := tk.previewCanned("Reassure")(context.Background()); err != nil {
+		t.Fatalf("previewCanned: %v", err)
+	}
+	if err := live.Session().Push(context.Background()); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	live.Patches()
+
+	html := live.HTML()
+	if !strings.Contains(html, "data-on:mousedown") || !strings.Contains(html, "$c.draft") {
+		t.Fatalf("insert button did not render a draft assignment binding: %s", html)
 	}
 }
 

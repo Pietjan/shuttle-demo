@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/pietjan/loom/badge"
@@ -12,12 +13,15 @@ import (
 	"github.com/pietjan/loom/fileupload"
 	"github.com/pietjan/loom/heading"
 	"github.com/pietjan/loom/icon"
+	"github.com/pietjan/loom/modal"
 	"github.com/pietjan/loom/progress"
 	"github.com/pietjan/loom/separator"
 	"github.com/pietjan/loom/text"
 	"github.com/pietjan/loom/textarea"
 	"github.com/pietjan/loom/timeline"
+	"github.com/pietjan/loom/tooltip"
 	"github.com/pietjan/shuttle"
+
 	"github.com/pietjan/shuttle-quickstart/internal/desk"
 )
 
@@ -229,7 +233,7 @@ templ watchersPanel(t *Ticket) {
 				for _, p := range people {
 					<li class="text-sm">
 						<span class="font-medium">{ p.Name }</span>
-						<span class="opacity-70"> · { p.Team }</span>
+						<span class="opacity-70">· { p.Team }</span>
 					</li>
 				}
 			</ul>
@@ -238,47 +242,91 @@ templ watchersPanel(t *Ticket) {
 }
 
 templ cannedResponses(t *Ticket) {
-	@card.New() {
-		<div class="flex flex-col gap-3">
-			@heading.New(heading.Level(2)) {
-				Canned responses
-			}
-			@text.New(text.Subtle, text.Small) {
-				These are expanded on the server with the current customer, agent and ticket data.
-			}
-			<div class="flex flex-col gap-2">
-				for _, response := range t.cannedResponses() {
-					<div class="rounded-md border border-base-200 p-3 dark:border-base-800">
-						<div class="flex items-start justify-between gap-3">
-							<div class="flex flex-col gap-1">
-								@button.New(
-									button.Subtle,
-									button.Small,
-									shuttle.ID(ctx, button.ID, "canned-"+response.Name),
-									shuttle.OnClick(ctx, button.Attr, t.selectCanned(response.Name)),
-								) {
-									{ response.Name }
-								}
-								@text.New(text.Subtle, text.Small) {
-									{ response.Note }
-								}
-							</div>
-							<pre class="max-w-64 whitespace-pre-wrap text-right text-xs leading-5 opacity-70">{ response.Body }</pre>
-						</div>
-					</div>
+	@modal.Root(modal.Name("canned-preview")) {
+		@card.New() {
+			<div class="flex flex-col gap-3">
+				@heading.New(heading.Level(2)) {
+					Canned responses
 				}
-			</div>
-			if t.cannedPreview != "" {
-				<div class="rounded-md border border-base-200 bg-base-100 p-3 dark:border-base-800 dark:bg-base-900/40">
-					@heading.New(heading.Level(3)) {
-						Preview: { t.cannedName }
-					}
-					@text.New(text.Small) {
-						{ t.cannedPreview }
+				<div class="flex flex-row gap-2">
+					for _, response := range t.cannedResponses() {
+						@tooltip.New(tooltip.Text(response.Note)) {
+							@button.New(
+								button.Subtle,
+								button.Small,
+								shuttle.ID(ctx, button.ID, "canned-"+response.Name),
+								shuttle.On(button.Attr, "mouseup", "document.getElementById('canned-preview').showModal()"),
+								shuttle.OnEvent(ctx, button.Attr, "click", t.previewCanned(response.Name)),
+							) {
+								{ response.Name }
+							}
+						}
 					}
 				</div>
-			}
-		</div>
+				if t.cannedPreview != "" {
+					@modal.Content(modal.Attr("open", "")) {
+						<div class="flex max-h-[80dvh] flex-col gap-4">
+							<div class="flex items-start justify-between gap-4">
+								<div class="flex flex-col gap-1">
+									@modal.Title() {
+										Preview: { t.cannedName }
+									}
+									@text.New(text.Subtle, text.Small) {
+										This is expanded on the server before it reaches the draft box.
+									}
+								</div>
+								@modal.Close() {
+									@button.New(button.Ghost, button.Small, button.Label("Close"), shuttle.OnClick(ctx, button.Attr, t.dismissCannedPreview)) {
+										@icon.New(icon.X)
+									}
+								}
+							</div>
+							<pre class="max-h-[50dvh] overflow-auto whitespace-pre-wrap rounded-md bg-base-200/70 p-4 text-sm leading-6 dark:bg-base-900/60">{ t.cannedPreview }</pre>
+							<div class="flex items-center justify-between gap-3">
+								@text.New(text.Subtle, text.Small) {
+									Use this to fill the reply box.
+								}
+								@modal.Close() {
+									@button.New(
+										button.Primary,
+										button.Small,
+										button.Label("Insert into draft"),
+										shuttle.ID(ctx, button.ID, "canned-preview-insert"),
+										shuttle.OnClick(ctx, button.Attr, t.dismissCannedPreview),
+										shuttle.On(button.Attr, "mousedown", shuttle.Ref(ctx, "draft")+" = "+strconv.Quote(t.cannedPreview)),
+									) {
+										Insert into draft
+									}
+								}
+							</div>
+						</div>
+					}
+				} else {
+					@modal.Content() {
+						<div class="flex max-h-[80dvh] flex-col gap-4">
+							<div class="flex items-start justify-between gap-4">
+								<div class="flex flex-col gap-1">
+									@modal.Title() {
+										Preview
+									}
+									@text.New(text.Subtle, text.Small) {
+										Choose a canned response to preview it here.
+									}
+								</div>
+								@modal.Close() {
+									@button.New(button.Ghost, button.Small, button.Label("Close"), shuttle.OnClick(ctx, button.Attr, t.dismissCannedPreview)) {
+										@icon.New(icon.X)
+									}
+								}
+							</div>
+							@text.New(text.Subtle, text.Small) {
+								Choose a canned response to preview it here.
+							}
+						</div>
+					}
+				}
+			</div>
+		}
 	}
 }
 
