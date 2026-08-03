@@ -83,8 +83,12 @@ type Store interface {
 	Ticket(ctx context.Context, id string) (Ticket, error)
 	CreateTicket(ctx context.Context, t Ticket, actorID string) (Ticket, error)
 	Assign(ctx context.Context, ticketID, agentID, actorID string) (Ticket, error)
+	AssignVersioned(ctx context.Context, ticketID, agentID, actorID string, expectedVersion int64) (Ticket, error)
+	AutoAssign(ctx context.Context, ticketID, actorID string) (Ticket, error)
 	SetStatus(ctx context.Context, ticketID string, s Status, actorID string) (Ticket, error)
+	SetStatusVersioned(ctx context.Context, ticketID string, s Status, actorID string, expectedVersion int64) (Ticket, error)
 	SetPriority(ctx context.Context, ticketID string, p Priority, actorID string) (Ticket, error)
+	SetPriorityVersioned(ctx context.Context, ticketID string, p Priority, actorID string, expectedVersion int64) (Ticket, error)
 
 	Comments(ctx context.Context, ticketID string) ([]Comment, error)
 	AddComment(ctx context.Context, c Comment) (Comment, error)
@@ -130,6 +134,9 @@ type Memory struct {
 	// out T-1, T-5, T-11 - and a support desk whose ticket numbers skip
 	// looks like a support desk that is losing tickets.
 	seq map[string]int
+
+	// rr is the round-robin cursor for auto-assignment.
+	rr int
 }
 
 // NewMemory returns an empty store. Use Seed for one with something in it.
@@ -260,6 +267,7 @@ func (m *Memory) CreateTicket(_ context.Context, t Ticket, actorID string) (Tick
 	now := m.now()
 	t.ID = m.nextID("T")
 	t.Opened, t.Updated = now, now
+	t.Version = 1
 	if t.Status == "" {
 		t.Status = StatusOpen
 	}
@@ -274,8 +282,13 @@ func (m *Memory) CreateTicket(_ context.Context, t Ticket, actorID string) (Tick
 
 // Assign puts a ticket on an agent, or takes it off one when agentID is
 // empty.
-func (m *Memory) Assign(_ context.Context, ticketID, agentID, actorID string) (Ticket, error) {
-	return m.update(ticketID, actorID, EventAssigned, func(t *Ticket) string {
+func (m *Memory) Assign(ctx context.Context, ticketID, agentID, actorID string) (Ticket, error) {
+	return m.AssignVersioned(ctx, ticketID, agentID, actorID, 0)
+}
+
+// AssignVersioned puts a ticket on an agent with an optional version check.
+func (m *Memory) AssignVersioned(_ context.Context, ticketID, agentID, actorID string, expectedVersion int64) (Ticket, error) {
+	return m.update(ticketID, actorID, EventAssigned, expectedVersion, func(t *Ticket) string {
 		t.Assignee = agentID
 		if agentID == "" {
 			return "unassigned"
@@ -284,17 +297,54 @@ func (m *Memory) Assign(_ context.Context, ticketID, agentID, actorID string) (T
 	})
 }
 
+// AutoAssign puts a ticket on the next agent in round-robin order.
+func (m *Memory) AutoAssign(_ context.Context, ticketID, actorID string) (Ticket, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.agents) == 0 {
+		return Ticket{}, fmt.Errorf("%w: no agents", ErrNotFound)
+	}
+
+	for i := range m.tickets {
+		if m.tickets[i].ID != ticketID {
+			continue
+		}
+		agent := m.agents[m.rr%len(m.agents)]
+		m.rr++
+
+		m.tickets[i].Assignee = agent.ID
+		m.tickets[i].Updated = m.now()
+		m.tickets[i].Version++
+		m.record(EventAssigned, ticketID, actorID, "assigned to "+agent.Name+" (auto)")
+		return m.tickets[i], nil
+	}
+
+	return Ticket{}, fmt.Errorf("%w: ticket %s", ErrNotFound, ticketID)
+}
+
 // SetStatus moves a ticket through its workflow.
-func (m *Memory) SetStatus(_ context.Context, ticketID string, s Status, actorID string) (Ticket, error) {
-	return m.update(ticketID, actorID, EventStatus, func(t *Ticket) string {
+func (m *Memory) SetStatus(ctx context.Context, ticketID string, s Status, actorID string) (Ticket, error) {
+	return m.SetStatusVersioned(ctx, ticketID, s, actorID, 0)
+}
+
+// SetStatusVersioned moves a ticket through its workflow with an optional
+// version check.
+func (m *Memory) SetStatusVersioned(_ context.Context, ticketID string, s Status, actorID string, expectedVersion int64) (Ticket, error) {
+	return m.update(ticketID, actorID, EventStatus, expectedVersion, func(t *Ticket) string {
 		t.Status = s
 		return s.Label()
 	})
 }
 
 // SetPriority changes how loudly a ticket asks for attention.
-func (m *Memory) SetPriority(_ context.Context, ticketID string, p Priority, actorID string) (Ticket, error) {
-	return m.update(ticketID, actorID, EventStatus, func(t *Ticket) string {
+func (m *Memory) SetPriority(ctx context.Context, ticketID string, p Priority, actorID string) (Ticket, error) {
+	return m.SetPriorityVersioned(ctx, ticketID, p, actorID, 0)
+}
+
+// SetPriorityVersioned changes priority with an optional version check.
+func (m *Memory) SetPriorityVersioned(_ context.Context, ticketID string, p Priority, actorID string, expectedVersion int64) (Ticket, error) {
+	return m.update(ticketID, actorID, EventStatus, expectedVersion, func(t *Ticket) string {
 		t.Priority = p
 		return p.Label() + " priority"
 	})
@@ -303,7 +353,7 @@ func (m *Memory) SetPriority(_ context.Context, ticketID string, p Priority, act
 // update is the shape every mutation shares: find it, change it, stamp it,
 // log it. The callback returns the event's detail, because only it knows
 // what it did.
-func (m *Memory) update(id, actorID string, kind EventKind, fn func(*Ticket) string) (Ticket, error) {
+func (m *Memory) update(id, actorID string, kind EventKind, expectedVersion int64, fn func(*Ticket) string) (Ticket, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -311,8 +361,12 @@ func (m *Memory) update(id, actorID string, kind EventKind, fn func(*Ticket) str
 		if m.tickets[i].ID != id {
 			continue
 		}
+		if expectedVersion > 0 && m.tickets[i].Version != expectedVersion {
+			return Ticket{}, fmt.Errorf("%w: ticket %s expected version %d got %d", ErrConflict, id, expectedVersion, m.tickets[i].Version)
+		}
 		detail := fn(&m.tickets[i])
 		m.tickets[i].Updated = m.now()
+		m.tickets[i].Version++
 		m.record(kind, id, actorID, detail)
 		return m.tickets[i], nil
 	}

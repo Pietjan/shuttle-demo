@@ -2,6 +2,7 @@ package desk_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -172,6 +173,60 @@ func TestAssignAndStatusRecordEvents(t *testing.T) {
 	if len(events.Rows) > 0 && events.Rows[0].Kind != desk.EventStatus {
 		t.Errorf("newest event = %q, want %q - the feed reads newest first",
 			events.Rows[0].Kind, desk.EventStatus)
+	}
+}
+
+func TestSetStatusVersionedConflictsOnStaleVersion(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := desk.NewMemory()
+
+	ticket, err := store.CreateTicket(ctx, desk.Ticket{Subject: "s", Customer: "c"}, "a-one")
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	if _, err := store.SetStatusVersioned(ctx, ticket.ID, desk.StatusPending, "a-one", ticket.Version); err != nil {
+		t.Fatalf("SetStatusVersioned first write: %v", err)
+	}
+
+	if _, err := store.SetStatusVersioned(ctx, ticket.ID, desk.StatusResolved, "a-two", ticket.Version); err == nil {
+		t.Fatal("SetStatusVersioned with stale version returned no error")
+	} else if !errors.Is(err, desk.ErrConflict) {
+		t.Fatalf("SetStatusVersioned stale error = %v, want ErrConflict", err)
+	}
+}
+
+func TestAutoAssignRoundRobin(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := fixture(t)
+
+	t1, err := store.CreateTicket(ctx, desk.Ticket{Subject: "a", Customer: "c"}, "a-one")
+	if err != nil {
+		t.Fatalf("CreateTicket t1: %v", err)
+	}
+	t2, err := store.CreateTicket(ctx, desk.Ticket{Subject: "b", Customer: "c"}, "a-one")
+	if err != nil {
+		t.Fatalf("CreateTicket t2: %v", err)
+	}
+
+	a1, err := store.AutoAssign(ctx, t1.ID, "a-one")
+	if err != nil {
+		t.Fatalf("AutoAssign t1: %v", err)
+	}
+	a2, err := store.AutoAssign(ctx, t2.ID, "a-one")
+	if err != nil {
+		t.Fatalf("AutoAssign t2: %v", err)
+	}
+
+	if a1.Assignee == "" || a2.Assignee == "" {
+		t.Fatal("auto-assigned ticket has empty assignee")
+	}
+	if a1.Assignee == a2.Assignee {
+		t.Errorf("round-robin assigned both tickets to %q", a1.Assignee)
 	}
 }
 

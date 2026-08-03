@@ -187,6 +187,26 @@ func (q *Queue) claim(id string) shuttle.Action {
 	}
 }
 
+// autoAssign assigns a ticket using the store's round-robin policy.
+func (q *Queue) autoAssign(id string) shuttle.Action {
+	return func(ctx context.Context) error {
+		ticket, err := q.store.AutoAssign(ctx, id, q.agent.ID)
+		if err != nil {
+			return err
+		}
+
+		if err := q.Publish(ctx, desk.TopicQueue, desk.TicketChanged{
+			TicketID: ticket.ID,
+			ActorID:  q.agent.ID,
+			Kind:     desk.EventAssigned,
+			Detail:   q.agent.Name + " auto-assigned " + ticket.ID,
+		}); err != nil {
+			return err
+		}
+		return q.reload(ctx)
+	}
+}
+
 // release takes a ticket off whoever has it.
 func (q *Queue) release(id string) shuttle.Action {
 	return func(ctx context.Context) error {

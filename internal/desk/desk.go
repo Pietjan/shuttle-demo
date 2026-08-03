@@ -10,6 +10,7 @@
 package desk
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -125,6 +126,7 @@ type Ticket struct {
 	Tags     []string
 	Opened   time.Time
 	Updated  time.Time
+	Version  int64
 
 	// FirstResponseAt is set when the first comment is posted.
 	FirstResponseAt time.Time
@@ -132,6 +134,9 @@ type Ticket struct {
 	// EscalatedAt is set when the ticket breaches resolution SLA.
 	EscalatedAt time.Time
 }
+
+// ErrConflict is returned when an update used a stale ticket version.
+var ErrConflict = errors.New("desk: conflict")
 
 // Unassigned reports whether the ticket is still nobody's.
 func (t Ticket) Unassigned() bool { return t.Assignee == "" }

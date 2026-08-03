@@ -107,10 +107,15 @@ templ assigneeCell(q *Queue, t desk.Ticket) {
 // row updates in place.
 templ actionCell(q *Queue, t desk.Ticket) {
 	if t.Unassigned() {
-		@button.New(button.Primary, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.claim(t.ID))) {
-			@icon.New(icon.HandGrabbing, icon.ExtraSmall)
-			Claim
-		}
+		<span class="inline-flex items-center gap-1">
+			@button.New(button.Primary, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.claim(t.ID))) {
+				@icon.New(icon.HandGrabbing, icon.ExtraSmall)
+				Claim
+			}
+			@button.New(button.Subtle, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.autoAssign(t.ID))) {
+				Auto
+			}
+		</span>
 	} else if t.Assignee == q.agent.ID {
 		@button.New(button.Subtle, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.release(t.ID))) {
 			Release

@@ -289,7 +289,7 @@ func (t *Ticket) searchAgents(ctx context.Context, query string) ([]live.Choice,
 // say so is scoped re-render working rather than an oversight.
 func (t *Ticket) assign(ctx context.Context, choice live.Choice) error {
 	if err := t.mutate(ctx, desk.EventAssigned, func(ctx context.Context) (desk.Ticket, string, error) {
-		ticket, err := t.store.Assign(ctx, t.id, choice.Value, t.agent.ID)
+		ticket, err := t.store.AssignVersioned(ctx, t.id, choice.Value, t.agent.ID, t.ticket.Version)
 		return ticket, t.agent.Name + " assigned " + t.id + " to " + choice.Label, err
 	}); err != nil {
 		return err
@@ -301,7 +301,7 @@ func (t *Ticket) assign(ctx context.Context, choice live.Choice) error {
 func (t *Ticket) setStatus(s desk.Status) shuttle.Action {
 	return func(ctx context.Context) error {
 		return t.mutate(ctx, desk.EventStatus, func(ctx context.Context) (desk.Ticket, string, error) {
-			ticket, err := t.store.SetStatus(ctx, t.id, s, t.agent.ID)
+			ticket, err := t.store.SetStatusVersioned(ctx, t.id, s, t.agent.ID, t.ticket.Version)
 			return ticket, t.agent.Name + " marked " + t.id + " " + s.Label(), err
 		})
 	}
@@ -311,7 +311,7 @@ func (t *Ticket) setStatus(s desk.Status) shuttle.Action {
 func (t *Ticket) setPriority(p desk.Priority) shuttle.Action {
 	return func(ctx context.Context) error {
 		return t.mutate(ctx, desk.EventStatus, func(ctx context.Context) (desk.Ticket, string, error) {
-			ticket, err := t.store.SetPriority(ctx, t.id, p, t.agent.ID)
+			ticket, err := t.store.SetPriorityVersioned(ctx, t.id, p, t.agent.ID, t.ticket.Version)
 			return ticket, t.agent.Name + " set " + t.id + " to " + p.Label(), err
 		})
 	}
@@ -345,6 +345,10 @@ func (t *Ticket) mutate(
 ) error {
 	ticket, detail, err := apply(ctx)
 	if err != nil {
+		if errors.Is(err, desk.ErrConflict) {
+			t.notice = "Another agent changed this ticket first. Re-read and try again."
+			return t.reload(ctx)
+		}
 		return err
 	}
 	t.ticket = ticket
