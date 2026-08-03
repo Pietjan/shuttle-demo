@@ -24,7 +24,7 @@ templ dashboard(d *Dashboard) {
 				the stream is already open.
 			}
 		</div>
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
 			// The sparkline is the tile's background rather than a second
 			// element beside it, which is what stat.Background is for.
 			@stat.New(
@@ -55,6 +55,14 @@ templ dashboard(d *Dashboard) {
 					}
 				}
 			}
+			@stat.New(stat.Label("SLA breached"), stat.Value(itoa(d.stats.Breached)), stat.Class("h-32")) {
+				if d.stats.Breached > 0 {
+					@badge.New(badge.Red, badge.Small) {
+						attention
+					}
+				}
+			}
+			@stat.New(stat.Label("Escalated"), stat.Value(itoa(d.stats.Escalated)), stat.Class("h-32"))
 		</div>
 		@card.New() {
 			// Server-rendered SVG. No client library, no hydration - the

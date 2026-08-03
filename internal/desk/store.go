@@ -61,6 +61,8 @@ type Stats struct {
 	Resolved   int
 	Unassigned int
 	Critical   int
+	Breached   int
+	Escalated  int
 
 	// Volume is tickets opened per day for the last 7 days, oldest first.
 	Volume []float64
@@ -149,8 +151,10 @@ func (m *Memory) nextID(prefix string) string {
 // Tickets applies the filter, sorts, and returns one page with the size of
 // the whole match.
 func (m *Memory) Tickets(_ context.Context, f Filter) (Page[Ticket], error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.applyEscalationsLocked()
 
 	matched := make([]Ticket, 0, len(m.tickets))
 	for _, t := range m.tickets {
@@ -235,8 +239,10 @@ func sortTickets(ts []Ticket, f Filter) {
 
 // Ticket returns one ticket by id.
 func (m *Memory) Ticket(_ context.Context, id string) (Ticket, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.applyEscalationsLocked()
 
 	for _, t := range m.tickets {
 		if t.ID == id {
@@ -353,6 +359,7 @@ func (m *Memory) AddComment(_ context.Context, c Comment) (Comment, error) {
 	c.ID = m.nextID("C")
 	c.Posted = m.now()
 	m.comments[c.TicketID] = append(m.comments[c.TicketID], c)
+	m.markFirstResponseLocked(c.TicketID, c.Posted)
 
 	detail := "replied"
 	if c.Internal {
@@ -361,6 +368,20 @@ func (m *Memory) AddComment(_ context.Context, c Comment) (Comment, error) {
 	m.record(EventCommented, c.TicketID, c.AuthorID, detail)
 	m.touch(c.TicketID)
 	return c, nil
+}
+
+// markFirstResponseLocked stamps first response when a thread gets its first
+// comment. Callers hold the write lock.
+func (m *Memory) markFirstResponseLocked(ticketID string, at time.Time) {
+	for i := range m.tickets {
+		if m.tickets[i].ID != ticketID {
+			continue
+		}
+		if m.tickets[i].FirstResponseAt.IsZero() {
+			m.tickets[i].FirstResponseAt = at
+		}
+		return
+	}
 }
 
 // Attachments returns a ticket's files.
@@ -464,10 +485,13 @@ func (m *Memory) Events(_ context.Context, offset, limit int) (Page[Event], erro
 // queries could each be right and still disagree with each other, which on a
 // dashboard reads as a bug in the arithmetic.
 func (m *Memory) Stats(_ context.Context) (Stats, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.applyEscalationsLocked()
 
 	var s Stats
+	now := m.now()
 	for _, t := range m.tickets {
 		switch t.Status {
 		case StatusOpen:
@@ -482,6 +506,12 @@ func (m *Memory) Stats(_ context.Context) (Stats, error) {
 		}
 		if t.Priority == PriorityCritical && t.Status.Open() {
 			s.Critical++
+		}
+		if t.Status.Open() && (t.FirstResponseBreached(now) || t.ResolutionBreached(now)) {
+			s.Breached++
+		}
+		if t.Status.Open() && !t.EscalatedAt.IsZero() {
+			s.Escalated++
 		}
 	}
 
@@ -500,4 +530,24 @@ func (m *Memory) Stats(_ context.Context) (Stats, error) {
 		}
 	}
 	return s, nil
+}
+
+// applyEscalationsLocked raises open tickets that have breached resolution
+// SLA and records an event once. Callers hold the write lock.
+func (m *Memory) applyEscalationsLocked() {
+	now := m.now()
+	for i := range m.tickets {
+		t := &m.tickets[i]
+		if !t.Status.Open() {
+			continue
+		}
+		if !t.EscalatedAt.IsZero() {
+			continue
+		}
+		if now.After(t.ResolutionDue()) {
+			t.EscalatedAt = now
+			t.Updated = now
+			m.record(EventEscalated, t.ID, "system", "SLA breached; escalated")
+		}
+	}
 }

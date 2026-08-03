@@ -276,6 +276,21 @@ func TestTicketIgnoresOtherTicketsMessages(t *testing.T) {
 	}
 }
 
+func TestTicketShowsTypingIndicatorFromOtherAgent(t *testing.T) {
+	store := storeWith(t, desk.Ticket{Subject: "Typing", Customer: "A"})
+
+	tk := newTicket(store, agent, "T-1")
+	live := shuttle.Test(t, tk)
+
+	live.Publish(desk.TicketTypingTopic("T-1"), desk.TicketTyping{
+		TicketID: "T-1",
+		AgentID:  other.ID,
+		IsTyping: true,
+	})
+
+	live.Assert().TextContains("body", "a-ravi is typing...")
+}
+
 func TestTicketMissingRendersAnAnswer(t *testing.T) {
 	live := shuttle.Test(t, newTicket(desk.NewMemory(), agent, "T-404"))
 	live.Assert().

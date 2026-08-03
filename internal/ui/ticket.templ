@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	"github.com/pietjan/loom/badge"
 	"github.com/pietjan/loom/button"
 	"github.com/pietjan/loom/callout"
@@ -43,6 +45,7 @@ templ ticketScreen(t *Ticket) {
 				</div>
 				<div class="flex flex-col gap-6">
 					@ticketFacts(t)
+					@watchersPanel(t)
 					@assignPanel(t)
 					@attachPanel(t)
 				</div>
@@ -141,6 +144,47 @@ templ ticketFacts(t *Ticket) {
 				{ stamp(t.ticket.Opened) }
 			}
 			@description.Term() {
+				First response SLA
+			}
+			@description.Detail() {
+				if t.ticket.FirstResponseBreached(now()) {
+					@badge.New(badge.Red, badge.Small) {
+						Breached
+					}
+				} else {
+					@badge.New(badge.Green, badge.Small) {
+						On track
+					}
+				}
+				<span class="ml-2 text-xs opacity-70">due { stamp(t.ticket.FirstResponseDue()) }</span>
+			}
+			@description.Term() {
+				Resolution SLA
+			}
+			@description.Detail() {
+				if t.ticket.ResolutionBreached(now()) {
+					@badge.New(badge.Red, badge.Small) {
+						Breached
+					}
+				} else {
+					@badge.New(badge.Green, badge.Small) {
+						On track
+					}
+				}
+				<span class="ml-2 text-xs opacity-70">due { stamp(t.ticket.ResolutionDue()) }</span>
+			}
+			if !t.ticket.EscalatedAt.IsZero() {
+				@description.Term() {
+					Escalated
+				}
+				@description.Detail() {
+					@badge.New(badge.Red, badge.Small) {
+						Escalated
+					}
+					<span class="ml-2 text-xs opacity-70">{ stamp(t.ticket.EscalatedAt) }</span>
+				}
+			}
+			@description.Term() {
 				Priority
 			}
 			@description.Detail() {
@@ -166,6 +210,28 @@ templ ticketFacts(t *Ticket) {
 					</span>
 				}
 			}
+		}
+	}
+}
+
+templ watchersPanel(t *Ticket) {
+	@card.New() {
+		@heading.New(heading.Level(2)) {
+			Viewing this ticket
+		}
+		if people := t.watchers(); len(people) == 0 {
+			@text.New(text.Subtle, text.Small) {
+				Nobody connected.
+			}
+		} else {
+			<ul class="space-y-1">
+				for _, p := range people {
+					<li class="text-sm">
+						<span class="font-medium">{ p.Name }</span>
+						<span class="opacity-70"> · { p.Team }</span>
+					</li>
+				}
+			</ul>
 		}
 	}
 }
@@ -341,6 +407,7 @@ templ composer(t *Ticket) {
 		@textarea.New(
 			shuttle.ID(ctx, textarea.ID, "draft"),
 			shuttle.Bind(ctx, textarea.Attr, "draft"),
+			shuttle.OnChange(ctx, textarea.Attr, 250*time.Millisecond, t.typingState),
 			textarea.Rows(3),
 			textarea.Placeholder("Reply to the customer, or leave an internal note…"),
 		)
@@ -371,5 +438,10 @@ templ composer(t *Ticket) {
 				Post
 			}
 		</div>
+		if msg := t.typingSummary(); msg != "" {
+			@text.New(text.Subtle, text.Small) {
+				{ msg }
+			}
+		}
 	</div>
 }

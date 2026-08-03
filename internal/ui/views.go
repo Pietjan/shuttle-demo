@@ -70,6 +70,8 @@ func kindIcon(k desk.EventKind) icon.Name {
 		return icon.ChatCircle
 	case desk.EventAttached:
 		return icon.Paperclip
+	case desk.EventEscalated:
+		return icon.Warning
 	default:
 		return icon.Circle
 	}

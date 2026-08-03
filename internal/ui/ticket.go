@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -52,6 +53,16 @@ type Ticket struct {
 
 	uploadErr error
 	notice    string
+
+	typing map[string]bool
+}
+
+// TicketPresence is what a mounted ticket publishes to its per-ticket room.
+type TicketPresence struct {
+	ID       string
+	Name     string
+	Team     string
+	Initials string
 }
 
 func newTicket(store desk.Store, agent desk.Agent, id string) *Ticket {
@@ -76,6 +87,17 @@ func newTicket(store desk.Store, agent desk.Agent, id string) *Ticket {
 // has open.
 func (t *Ticket) Mount(ctx context.Context, _ shuttle.Params) error {
 	if err := t.Subscribe(desk.TicketTopic(t.id)); err != nil {
+		return err
+	}
+	if err := t.Subscribe(desk.TicketTypingTopic(t.id)); err != nil {
+		return err
+	}
+	if err := t.Join(ctx, desk.TicketPresenceTopic(t.id), TicketPresence{
+		ID:       t.agent.ID,
+		Name:     t.agent.Name,
+		Team:     t.agent.Team,
+		Initials: t.agent.Initials(),
+	}); err != nil {
 		return err
 	}
 	return t.reload(ctx)
@@ -146,6 +168,25 @@ func (t *Ticket) HandleInfo(ctx context.Context, msg any) error {
 			t.notice = m.Detail
 		}
 		return t.reload(ctx)
+
+	case desk.TicketTyping:
+		if m.TicketID != t.id || m.AgentID == t.agent.ID {
+			return nil
+		}
+		if t.typing == nil {
+			t.typing = map[string]bool{}
+		}
+		if m.IsTyping {
+			t.typing[m.AgentID] = true
+		} else {
+			delete(t.typing, m.AgentID)
+		}
+		return nil
+
+	case shuttle.PresenceEvent:
+		// Presence() is read while rendering. Naming this case keeps it
+		// obvious that ticket-level presence is intentionally passive here.
+		return nil
 	}
 	return nil
 }
@@ -181,6 +222,11 @@ func (t *Ticket) post(ctx context.Context) error {
 		return err
 	}
 	if strings.TrimSpace(form.Draft) == "" {
+		_ = t.Publish(ctx, desk.TicketTypingTopic(t.id), desk.TicketTyping{
+			TicketID: t.id,
+			AgentID:  t.agent.ID,
+			IsTyping: false,
+		})
 		return nil
 	}
 
@@ -198,6 +244,22 @@ func (t *Ticket) post(ctx context.Context) error {
 		TicketID:  t.id,
 		CommentID: comment.ID,
 		AuthorID:  t.agent.ID,
+	})
+}
+
+// typingState publishes whether this agent currently has a non-empty draft.
+func (t *Ticket) typingState(ctx context.Context) error {
+	var form struct {
+		Draft string `json:"draft"`
+	}
+	if err := shuttle.DecodeSignals(ctx, &form); err != nil {
+		return err
+	}
+
+	return t.Publish(ctx, desk.TicketTypingTopic(t.id), desk.TicketTyping{
+		TicketID: t.id,
+		AgentID:  t.agent.ID,
+		IsTyping: strings.TrimSpace(form.Draft) != "",
 	})
 }
 
@@ -373,6 +435,59 @@ func (t *Ticket) authorName(id string) string {
 		return id
 	}
 	return agent.Name
+}
+
+// watchers is who is currently viewing this ticket.
+func (t *Ticket) watchers() []TicketPresence {
+	members := t.Presence(desk.TicketPresenceTopic(t.id))
+	out := make([]TicketPresence, 0, len(members))
+	seen := map[string]bool{}
+	for _, m := range members {
+		p, ok := m.Meta.(TicketPresence)
+		if !ok {
+			continue
+		}
+		if seen[p.ID] {
+			continue
+		}
+		seen[p.ID] = true
+		out = append(out, p)
+	}
+	return out
+}
+
+// typingNames resolves which other agents are drafting right now.
+func (t *Ticket) typingNames() []string {
+	if len(t.typing) == 0 {
+		return nil
+	}
+
+	out := make([]string, 0, len(t.typing))
+	for id := range t.typing {
+		agent, err := t.store.Agent(context.Background(), id)
+		if err != nil {
+			out = append(out, id)
+			continue
+		}
+		out = append(out, agent.Name)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// typingSummary renders a short line for current typing state.
+func (t *Ticket) typingSummary() string {
+	names := t.typingNames()
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0] + " is typing..."
+	case 2:
+		return names[0] + " and " + names[1] + " are typing..."
+	default:
+		return names[0] + " and others are typing..."
+	}
 }
 
 // back returns to the queue.

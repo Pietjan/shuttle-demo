@@ -125,6 +125,12 @@ type Ticket struct {
 	Tags     []string
 	Opened   time.Time
 	Updated  time.Time
+
+	// FirstResponseAt is set when the first comment is posted.
+	FirstResponseAt time.Time
+
+	// EscalatedAt is set when the ticket breaches resolution SLA.
+	EscalatedAt time.Time
 }
 
 // Unassigned reports whether the ticket is still nobody's.
@@ -143,6 +149,58 @@ func (t Ticket) Age(now time.Time) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+}
+
+// FirstResponseDue is when this ticket expects an initial reply.
+func (t Ticket) FirstResponseDue() time.Time {
+	return t.Opened.Add(firstResponseSLA(t.Priority))
+}
+
+// ResolutionDue is when this ticket expects a resolution.
+func (t Ticket) ResolutionDue() time.Time {
+	return t.Opened.Add(resolutionSLA(t.Priority))
+}
+
+// FirstResponseBreached reports whether first-response SLA has been missed.
+func (t Ticket) FirstResponseBreached(now time.Time) bool {
+	if !t.FirstResponseAt.IsZero() {
+		return false
+	}
+	return now.After(t.FirstResponseDue())
+}
+
+// ResolutionBreached reports whether resolution SLA has been missed.
+func (t Ticket) ResolutionBreached(now time.Time) bool {
+	if !t.Status.Open() {
+		return false
+	}
+	return now.After(t.ResolutionDue())
+}
+
+func firstResponseSLA(p Priority) time.Duration {
+	switch p {
+	case PriorityCritical:
+		return 15 * time.Minute
+	case PriorityHigh:
+		return time.Hour
+	case PriorityLow:
+		return 12 * time.Hour
+	default:
+		return 4 * time.Hour
+	}
+}
+
+func resolutionSLA(p Priority) time.Duration {
+	switch p {
+	case PriorityCritical:
+		return 4 * time.Hour
+	case PriorityHigh:
+		return 12 * time.Hour
+	case PriorityLow:
+		return 72 * time.Hour
+	default:
+		return 24 * time.Hour
 	}
 }
 
@@ -179,6 +237,7 @@ const (
 	EventStatus    EventKind = "status"
 	EventCommented EventKind = "commented"
 	EventAttached  EventKind = "attached"
+	EventEscalated EventKind = "escalated"
 )
 
 // Event is one entry in the activity log. It is the dashboard's feed and the

@@ -64,6 +64,13 @@ templ subjectCell(q *Queue, t desk.Ticket) {
 		// Wrapping rather than truncating: a subject is what an agent
 		// scans the queue by, and half of one is not a summary.
 		<span class="line-clamp-2">{ t.Subject }</span>
+		if !t.EscalatedAt.IsZero() {
+			<span class="ml-2 inline-block align-middle">
+				@badge.New(badge.Red, badge.Small) {
+					escalated
+				}
+			</span>
+		}
 	}
 }
 

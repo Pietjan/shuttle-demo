@@ -25,6 +25,12 @@ const TopicPresence = "presence"
 // each other's edits without every console being woken for it.
 func TicketTopic(id string) string { return "ticket:" + id }
 
+// TicketPresenceTopic is who is currently viewing one ticket.
+func TicketPresenceTopic(id string) string { return TicketTopic(id) + ":presence" }
+
+// TicketTypingTopic is ephemeral typing state for one ticket.
+func TicketTypingTopic(id string) string { return TicketTopic(id) + ":typing" }
+
 // TicketChanged says a ticket moved. Subscribers re-read it.
 type TicketChanged struct {
 	TicketID string
@@ -50,4 +56,11 @@ type CommentPosted struct {
 	TicketID  string
 	CommentID string
 	AuthorID  string
+}
+
+// TicketTyping says whether one agent is currently drafting on a ticket.
+type TicketTyping struct {
+	TicketID  string
+	AgentID   string
+	IsTyping  bool
 }
