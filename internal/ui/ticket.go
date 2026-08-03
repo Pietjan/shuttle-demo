@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"strconv"
 	"slices"
+	"strconv"
 	"strings"
-	"time"
 	texttpl "text/template"
+	"time"
 
 	"github.com/a-h/templ"
 
@@ -64,9 +64,9 @@ type Ticket struct {
 }
 
 type cannedResponse struct {
-	Name  string
-	Body  string
-	Note  string
+	Name string
+	Body string
+	Note string
 }
 
 type cannedData struct {
@@ -283,8 +283,8 @@ func (t *Ticket) post(ctx context.Context) error {
 		})
 		return nil
 	}
-	 t.cannedName = ""
-	 t.cannedPreview = ""
+	t.cannedName = ""
+	t.cannedPreview = ""
 
 	comment, err := t.store.AddComment(ctx, desk.Comment{
 		TicketID: t.id,
@@ -313,8 +313,8 @@ func (t *Ticket) cannedResponses() []cannedResponse {
 	return out
 }
 
-// selectCanned applies one canned response and records the expanded preview.
-func (t *Ticket) selectCanned(name string) shuttle.Action {
+// previewCanned prepares a canned response for the modal preview.
+func (t *Ticket) previewCanned(name string) shuttle.Action {
 	return func(context.Context) error {
 		for _, response := range t.cannedResponses() {
 			if response.Name != name {
@@ -326,6 +326,13 @@ func (t *Ticket) selectCanned(name string) shuttle.Action {
 		}
 		return nil
 	}
+}
+
+// dismissCannedPreview closes the preview modal.
+func (t *Ticket) dismissCannedPreview(context.Context) error {
+	t.cannedName = ""
+	t.cannedPreview = ""
+	return nil
 }
 
 // typingState publishes whether this agent currently has a non-empty draft.
