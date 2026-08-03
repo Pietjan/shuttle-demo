@@ -4,7 +4,7 @@
 //	make run/tls    # over HTTP/2, which is what several open tabs need
 //
 // Agents work a shared ticket queue. What makes it worth reading as a
-// quickstart is that the pieces have to work together: the queue is a live
+// demo is that the pieces have to work together: the queue is a live
 // table over a store the browser never receives, claiming a ticket in one
 // window updates it in another, and the whole console - queue, ticket,
 // compose, dashboard - is *one* session and one stream.
@@ -40,10 +40,10 @@ import (
 
 	"github.com/pietjan/shuttle"
 
-	"github.com/pietjan/shuttle-quickstart/assets"
-	"github.com/pietjan/shuttle-quickstart/internal/auth"
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
-	"github.com/pietjan/shuttle-quickstart/internal/ui"
+	"github.com/pietjan/shuttle-demo/assets"
+	"github.com/pietjan/shuttle-demo/internal/auth"
+	"github.com/pietjan/shuttle-demo/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/ui"
 )
 
 func main() {

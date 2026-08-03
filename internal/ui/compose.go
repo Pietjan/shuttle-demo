@@ -9,7 +9,7 @@ import (
 
 	"github.com/pietjan/shuttle"
 
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/desk"
 )
 
 // Compose files a new ticket. It is the change/submit split: OnChange

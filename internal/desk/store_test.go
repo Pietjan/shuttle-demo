@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/desk"
 )
 
 // fixture builds a store with three tickets in a known shape.

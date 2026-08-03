@@ -20,6 +20,10 @@ github.com/klauspost/compress v1.18.0/go.mod h1:2Pp+KzxcywXVXMr50+X0Q/Lsb43OQHYW
 github.com/klauspost/pgzip v1.2.6/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
 github.com/pierrec/lz4/v4 v4.1.18 h1:xaKrnTkyoqfh1YItXl56+6KJNVYWlEEPuAQW9xsplYQ=
 github.com/pierrec/lz4/v4 v4.1.18/go.mod h1:gZWDp/Ze/IJXGXf23ltt2EXimqmTUXEy0GFuRQyBid4=
+github.com/pietjan/loom v0.0.0-20260802231856-03d8564d5bbf h1:LP+P0C0atqTo7e5ENW6+g9ZWhjC7YehZ8/Pz741BwJ4=
+github.com/pietjan/loom v0.0.0-20260802231856-03d8564d5bbf/go.mod h1:wZx+ZB2sssi97225Q6aqsN6v0cb5b3Ch39ReE2VkhdE=
+github.com/pietjan/shuttle v0.0.0-20260803063010-a6a05cf1853c h1:k9DJst1hEbtrXMJx5We/fFeVH5kS92R6PD06S0EiRKY=
+github.com/pietjan/shuttle v0.0.0-20260803063010-a6a05cf1853c/go.mod h1:uk0av94wV3se4CWX2nb8+H9TgUF/B9oW68c+lQH3rpI=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/starfederation/datastar-go v1.2.2 h1:f+U2y5FY5tXgXaTVXkuKu+Tz9uh7BU1j8jxthYmcC9Q=

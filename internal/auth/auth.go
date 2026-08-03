@@ -3,7 +3,7 @@
 // runs.
 //
 // It is deliberately not a login system - there is no password anywhere in
-// here - because what the quickstart needs to demonstrate is the seam, not
+// here - because what the demo needs to demonstrate is the seam, not
 // the credential. Two things about that seam are real and would survive
 // being swapped for OIDC tomorrow:
 //
@@ -21,7 +21,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/desk"
 )
 
 // CookieName is where the signed-in agent's id is kept.
@@ -31,7 +31,7 @@ type ctxKey struct{}
 
 // Middleware resolves the cookie to an agent and puts it in the request
 // context. An unknown or missing cookie falls back to the first agent, so
-// the quickstart is signed in the moment it starts - a real one would
+// the demo is signed in the moment it starts - a real one would
 // redirect to a login page here, which is the only line that would change.
 func Middleware(store desk.Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

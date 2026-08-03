@@ -11,7 +11,7 @@ import (
 	"github.com/pietjan/shuttle"
 	"github.com/pietjan/shuttle/live"
 
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/desk"
 )
 
 // The scopes the queue can be narrowed to. They live in the URL under a key

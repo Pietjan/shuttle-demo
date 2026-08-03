@@ -60,7 +60,7 @@ type CommentPosted struct {
 
 // TicketTyping says whether one agent is currently drafting on a ticket.
 type TicketTyping struct {
-	TicketID  string
-	AgentID   string
-	IsTyping  bool
+	TicketID string
+	AgentID  string
+	IsTyping bool
 }

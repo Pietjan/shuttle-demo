@@ -15,7 +15,7 @@ import (
 	"github.com/pietjan/shuttle"
 	"github.com/pietjan/shuttle/live"
 
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/desk"
 )
 
 // streamComments is the name of the comment thread's stream. A stream is
@@ -476,7 +476,7 @@ func (t *Ticket) Uploads() []shuttle.Upload {
 // be copied out first - which Save does, cleaning the client's filename on
 // the way: "../../etc/passwd" is exactly what an upload endpoint gets sent.
 // Here only the metadata is kept, because the bytes are nobody's business in
-// a quickstart; a real desk would Save into object storage and record the
+// a demo; a real desk would Save into object storage and record the
 // key.
 func (t *Ticket) HandleUpload(ctx context.Context, _ string, files []*shuttle.UploadedFile) error {
 	t.uploadErr = nil

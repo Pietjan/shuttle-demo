@@ -6,7 +6,7 @@
 // against a particular runtime, and a CLI older than the library in go.mod
 // generates code the library no longer expects. Pinning both here means
 // `make generate` cannot drift from what compiles.
-module github.com/pietjan/shuttle-quickstart/tools
+module github.com/pietjan/shuttle-demo/tools
 
 go 1.26.5
 

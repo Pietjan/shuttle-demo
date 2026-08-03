@@ -16,7 +16,7 @@ import (
 	"github.com/pietjan/loom/picker"
 	"github.com/pietjan/shuttle"
 
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/desk"
 )
 
 // The event names children emit up to the console. Constants rather than

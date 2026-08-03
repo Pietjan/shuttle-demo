@@ -23,8 +23,8 @@ import (
 
 	"github.com/pietjan/shuttle"
 
-	"github.com/pietjan/shuttle-quickstart/internal/auth"
-	"github.com/pietjan/shuttle-quickstart/internal/desk"
+	"github.com/pietjan/shuttle-demo/internal/auth"
+	"github.com/pietjan/shuttle-demo/internal/desk"
 )
 
 // The console's sections. Each is a path under /desk and a keyed child.

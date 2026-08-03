@@ -1,20 +1,11 @@
-module github.com/pietjan/shuttle-quickstart
+module github.com/pietjan/shuttle-demo
 
 go 1.26.5
 
-// Neither library has a tagged release yet, so both resolve from the working
-// copies beside this one. When shuttle tags a version, drop both lines and
-// `go get github.com/pietjan/shuttle@vX.Y.Z` - and remember that
-// assets/css/input.css points @source at the same directory, so that path
-// becomes a module-cache path at the same time.
-replace github.com/pietjan/shuttle => ../shuttle
-
-replace github.com/pietjan/loom => ../loom
-
 require (
 	github.com/a-h/templ v0.3.1020
-	github.com/pietjan/loom v0.0.0
-	github.com/pietjan/shuttle v0.0.0-00010101000000-000000000000
+	github.com/pietjan/loom v0.0.0-20260802231856-03d8564d5bbf
+	github.com/pietjan/shuttle v0.0.0-20260803063010-a6a05cf1853c
 )
 
 require (
