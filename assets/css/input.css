@@ -1,0 +1,52 @@
+/* The Tailwind entry file. Hand-written; loom.css beside it is generated.
+ *
+ * Compile both with `make css`, which runs:
+ *
+ *   go run github.com/pietjan/loom/cmd/css -accent indigo -o assets/css/loom.css
+ *   tailwindcss -i assets/css/input.css -o assets/static/styles.css --minify
+ *
+ * Two commands because they do different jobs. cmd/css writes loom.css: the
+ * Tailwind import, loom's theme variables, its structural CSS, and an
+ * @source pointing at loom's own module directory. This file adds the
+ * sources that are *this application's* business.
+ *
+ * Every way of getting this wrong is quiet. There is no error for any of
+ * them - just a page that looks broken in a way that reads as a bug in the
+ * components.
+ */
+
+/* @import, not @source. A stylesheet read as a source is scanned for class
+ * names like any other text file, so @source-ing loom.css here would compile
+ * a sheet with nothing in it. */
+@import "./loom.css";
+
+/* This repository, so the classes written in the .templ views and in the Go
+ * that composes loom's components are compiled. */
+@source "../..";
+
+/* Shuttle's module directory, because Deskline uses its live/ kit - the
+ * table, the combobox and the feed. Their markup is Tailwind exactly as
+ * loom's is, so a build that sources only loom compiles a page whose pager
+ * has no layout and whose combobox popover has no panel.
+ *
+ * It is a relative path only because go.mod has a `replace` pointing at the
+ * working copy next door. When shuttle is published this becomes the module
+ * cache path, version and all:
+ *
+ *   @source "../../../go/pkg/mod/github.com/pietjan/shuttle@v0.1.0";
+ *
+ * which is also why `make css` is worth re-running after an upgrade. */
+@source "../../../shuttle";
+
+/* What is left is what could not be a class on an element.
+ *
+ * Loom's progress bar carries an inline width, so driving it from the
+ * upload's own progress means out-specifying an inline style from outside
+ * the component. !important is the honest way to write that down. The custom
+ * property is set by shuttle on the <input> for as long as bytes are moving;
+ * fetch reports no upload progress at all, which is why uploads have their
+ * own request in the first place. */
+input[data-shuttle-uploading] ~ [data-ui="progress"] [data-ui="progress-bar"] {
+    width: var(--shuttle-progress, 0%) !important;
+    transition: width 0.1s linear;
+}

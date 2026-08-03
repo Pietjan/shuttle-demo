@@ -1,0 +1,167 @@
+package ui
+
+import (
+	"github.com/pietjan/loom/avatar"
+	"github.com/pietjan/loom/badge"
+	"github.com/pietjan/loom/button"
+	"github.com/pietjan/loom/callout"
+	"github.com/pietjan/loom/header"
+	"github.com/pietjan/loom/heading"
+	"github.com/pietjan/loom/icon"
+	"github.com/pietjan/loom/link"
+	"github.com/pietjan/loom/navlist"
+	"github.com/pietjan/loom/picker"
+	"github.com/pietjan/loom/sidebar"
+	"github.com/pietjan/loom/text"
+	"github.com/pietjan/shuttle"
+)
+
+// console is the chrome around every screen.
+//
+// All of it is loom's - header, sidebar, navlist, avatar, badge, callout -
+// because an app demonstrating the stateful layer over loom that hand-wrote
+// its own navigation would be arguing against itself. What is left in raw
+// markup is the page's own layout, which is the split loom asks for: it
+// styles components, not your document.
+templ console(c *Console) {
+	<div class="flex min-h-dvh flex-col">
+		@header.New(header.Sticky()) {
+			@sidebar.Toggle()
+			@link.New("/desk/queue/", link.Ghost) {
+				@heading.New() {
+					Deskline
+				}
+			}
+			@header.Spacer()
+			@roster(c)
+			@identity(c)
+		}
+		<div class="flex flex-1 items-stretch">
+			@sidebar.New(sidebar.Class("lg:sticky lg:top-14 lg:h-[calc(100dvh-3.5rem)] lg:self-start")) {
+				@navlist.New(navlist.Label("Console")) {
+					@navItem(c, sectionQueue, "/desk/queue/", icon.Tray, "Queue", c.unassigned)
+					@navItem(c, sectionCompose, "/desk/new/", icon.PencilSimple, "New ticket", 0)
+					@navItem(c, sectionDashboard, "/desk/dashboard/", icon.ChartLine, "Dashboard", 0)
+				}
+			}
+			@header.Main() {
+				<div class="mx-auto w-full max-w-6xl px-6 py-8">
+					@notice(c)
+					@c.screen(ctx)
+				</div>
+			}
+		</div>
+	</div>
+}
+
+// navItem is one link in the sidebar.
+//
+// It is a real <a href> and the path it names really does serve this screen
+// on a fresh load, so the link stays copyable, middle-clickable and
+// bookmarkable. click__prevent is what stops an ordinary click from *also*
+// doing it the slow way: the modifier suppresses the browser's navigation
+// and the action calls Navigate instead, which pushes the same path into
+// history from the server without a page load.
+templ navItem(c *Console, section, path string, glyph icon.Name, label string, count int) {
+	@navlist.Item(path, navItemOptions(ctx, c, section, path)...) {
+		@icon.New(glyph, icon.Small)
+		{ label }
+		if count > 0 {
+			@badge.New(badge.Amber, badge.Small, badge.Pill()) {
+				{ itoa(count) }
+			}
+		}
+	}
+}
+
+// roster is who else has the console open.
+//
+// Presence is a live count of connected pages, not a database query - it
+// comes from the topic this component joined at mount, and it changes
+// because somebody's stream opened or closed rather than because anybody
+// asked.
+templ roster(c *Console) {
+	if people := c.Roster(); len(people) > 0 {
+		<div class="hidden items-center gap-2 sm:flex">
+			@text.New(text.Subtle, text.Small) {
+				Online
+			}
+			@avatar.Group() {
+				for _, p := range people {
+					@avatar.New(
+						avatar.Small,
+						avatar.Initials(p.Initials),
+						avatar.Alt(p.Name+" · "+p.Team),
+						avatar.WithStatus(avatar.StatusOnline),
+					)
+				}
+			}
+		</div>
+	}
+}
+
+// identity is the signed-in agent and the switcher.
+//
+// A real form doing a real POST, deliberately: switching agent closes the
+// old identity's sessions, and watching the page reload through that is the
+// point. Everything else in this app avoids page loads; this is the one
+// place where a page load is the correct answer, because the identity the
+// session captured at mount cannot be changed from inside it.
+templ identity(c *Console) {
+	<form method="post" action="/signin" class="flex items-center gap-2">
+		@picker.New(
+			picker.Name("agent"),
+			picker.Class("w-44"),
+			picker.Attr("aria-label", "Switch agent"),
+			picker.Attr("onchange", "this.form.requestSubmit()"),
+		) {
+			for _, a := range c.agents() {
+				@picker.Item(a.ID, pickerSelected(a.ID == c.agent.ID)...) {
+					{ a.Name }
+				}
+			}
+		}
+		<noscript>
+			@button.New(button.Small, button.WithType(button.TypeSubmit)) {
+				Switch
+			}
+		</noscript>
+	</form>
+}
+
+// notice is the console's flash message: what a child emitted up to it.
+templ notice(c *Console) {
+	if c.notice != "" {
+		<div class="mb-6">
+			@callout.New(calloutTone(c.noticeTone)) {
+				@icon.New(icon.Info)
+				@callout.Text() {
+					{ c.notice }
+				}
+				@button.New(
+					button.Ghost,
+					button.Small,
+					button.Label("Dismiss"),
+					button.Class("absolute right-2 top-2"),
+					shuttle.OnClick(ctx, button.Attr, c.dismiss),
+				) {
+					@icon.New(icon.X, icon.Small)
+				}
+			}
+		</div>
+	}
+}
+
+// failure is what a component's RenderError puts on the page in place of
+// whatever would not render. Without one, a render that fails after the
+// first paint leaves the old markup on screen and a line in the log as the
+// only evidence.
+templ failure(what string, err error) {
+	@callout.New(callout.Danger) {
+		@icon.New(icon.Warning)
+		@callout.Text() {
+			{ what }
+			<span class="block text-xs opacity-70">{ err.Error() }</span>
+		}
+	}
+}

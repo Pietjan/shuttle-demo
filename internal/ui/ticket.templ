@@ -1,0 +1,375 @@
+package ui
+
+import (
+	"github.com/pietjan/loom/badge"
+	"github.com/pietjan/loom/button"
+	"github.com/pietjan/loom/callout"
+	"github.com/pietjan/loom/card"
+	"github.com/pietjan/loom/checkbox"
+	"github.com/pietjan/loom/description"
+	"github.com/pietjan/loom/fileupload"
+	"github.com/pietjan/loom/heading"
+	"github.com/pietjan/loom/icon"
+	"github.com/pietjan/loom/progress"
+	"github.com/pietjan/loom/separator"
+	"github.com/pietjan/loom/text"
+	"github.com/pietjan/loom/textarea"
+	"github.com/pietjan/loom/timeline"
+	"github.com/pietjan/shuttle"
+	"github.com/pietjan/shuttle-quickstart/internal/desk"
+)
+
+// ticketScreen is the detail view.
+templ ticketScreen(t *Ticket) {
+	if !t.loaded {
+		@callout.New(callout.Warning) {
+			@icon.New(icon.Warning)
+			@callout.Text() {
+				No ticket { t.id }. It may have been merged or deleted.
+			}
+		}
+		@button.New(button.Outline, button.Small, shuttle.OnClick(ctx, button.Attr, t.back)) {
+			Back to the queue
+		}
+	} else {
+		<div class="flex flex-col gap-6">
+			@ticketHeader(t)
+			@ticketNotice(t)
+			<div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+				<div class="flex flex-col gap-6">
+					@ticketBody(t)
+					@thread(t)
+					@composer(t)
+				</div>
+				<div class="flex flex-col gap-6">
+					@ticketFacts(t)
+					@assignPanel(t)
+					@attachPanel(t)
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ ticketHeader(t *Ticket) {
+	<div class="flex flex-wrap items-start justify-between gap-4">
+		<div class="flex flex-col gap-2">
+			<div class="flex items-center gap-2">
+				<span class="font-mono text-xs tabular-nums opacity-70">{ t.ticket.ID }</span>
+				@badge.New(statusTone(t.ticket.Status), badge.Small) {
+					{ t.ticket.Status.Label() }
+				}
+				@badge.New(priorityTone(t.ticket.Priority), badge.Small) {
+					{ t.ticket.Priority.Label() }
+				}
+			</div>
+			@heading.New(heading.Level(1), heading.Large) {
+				{ t.ticket.Subject }
+			}
+		</div>
+		@resolveButton(t)
+	</div>
+}
+
+// resolveButton is the one control with a pending state.
+//
+// The signal is the client's own: Datastar sets it true for as long as the
+// request this button started is in flight, so "working…" costs no round
+// trip - there is nothing to ask and nobody to ask it of. IndicatorRef reads
+// the path rather than spelling it out, because this component is a child
+// and a hard-coded $ind.c.resolving would quietly watch the wrong signal.
+templ resolveButton(t *Ticket) {
+	if t.ticket.Status.Open() {
+		{{ pending := shuttle.IndicatorRef(ctx, "resolving") }}
+		<div class="flex items-center gap-3">
+			@text.New(text.Subtle, text.Small, text.Attr("data-show", pending)) {
+				Working — the server has not answered yet.
+			}
+			@button.New(
+				button.Primary,
+				shuttle.OnClick(ctx, button.Attr, t.resolve, shuttle.Indicator("resolving")),
+				button.Attr("data-attr:disabled", pending),
+			) {
+				@icon.New(icon.Check, icon.Small)
+				Resolve
+			}
+		</div>
+	}
+}
+
+// ticketNotice is what somebody else did while this was open.
+templ ticketNotice(t *Ticket) {
+	if t.notice != "" {
+		@callout.New(callout.Info, callout.Class("relative")) {
+			@icon.New(icon.Broadcast)
+			@callout.Text() {
+				{ t.notice }
+			}
+			@button.New(button.Ghost, button.Tiny, button.Label("Dismiss"), button.Class("absolute right-2 top-2"), shuttle.OnClick(ctx, button.Attr, t.dismiss)) {
+				@icon.New(icon.X)
+			}
+		}
+	}
+}
+
+templ ticketBody(t *Ticket) {
+	@card.New() {
+		@text.New() {
+			{ t.ticket.Body }
+		}
+	}
+}
+
+// ticketFacts is a description list, which is what a set of term/detail
+// pairs is - rather than a table with the borders turned off.
+templ ticketFacts(t *Ticket) {
+	@card.New() {
+		@heading.New(heading.Level(2)) {
+			Details
+		}
+		@description.New() {
+			@description.Term() {
+				Customer
+			}
+			@description.Detail() {
+				{ t.ticket.Customer }
+			}
+			@description.Term() {
+				Opened
+			}
+			@description.Detail() {
+				{ stamp(t.ticket.Opened) }
+			}
+			@description.Term() {
+				Priority
+			}
+			@description.Detail() {
+				@priorityControls(t)
+			}
+			@description.Term() {
+				Status
+			}
+			@description.Detail() {
+				@statusControls(t)
+			}
+			if len(t.ticket.Tags) > 0 {
+				@description.Term() {
+					Tags
+				}
+				@description.Detail() {
+					<span class="flex flex-wrap gap-1">
+						for _, tag := range t.ticket.Tags {
+							@badge.New(badge.Zinc, badge.Small) {
+								{ tag }
+							}
+						}
+					</span>
+				}
+			}
+		}
+	}
+}
+
+templ priorityControls(t *Ticket) {
+	<span class="flex flex-wrap gap-1">
+		for _, p := range desk.Priorities {
+			@button.New(
+				scopeVariant(t.ticket.Priority == p),
+				button.Tiny,
+				shuttle.OnClick(ctx, button.Attr, t.setPriority(p)),
+			) {
+				{ p.Label() }
+			}
+		}
+	</span>
+}
+
+templ statusControls(t *Ticket) {
+	<span class="flex flex-wrap gap-1">
+		for _, s := range desk.Statuses {
+			@button.New(
+				scopeVariant(t.ticket.Status == s),
+				button.Tiny,
+				shuttle.OnClick(ctx, button.Attr, t.setStatus(s)),
+			) {
+				{ s.Label() }
+			}
+		}
+	</span>
+}
+
+// assignPanel is the combobox over a set the browser never receives.
+//
+// It is a component in its own right, mounted as a keyed child - so typing
+// in it re-renders it and nothing else, and the query lives on the client
+// until the debounce expires.
+templ assignPanel(t *Ticket) {
+	@card.New() {
+		@heading.New(heading.Level(2)) {
+			Assignee
+		}
+		if name := t.assigneeName(ctx); name != "" {
+			@text.New(text.Small) {
+				Currently { name }.
+			}
+		} else {
+			@text.New(text.Subtle, text.Small) {
+				Nobody yet.
+			}
+		}
+		<div class="mt-2">
+			@shuttle.Child(ctx, "assignee", func() shuttle.Component { return t.picker })
+		</div>
+	}
+}
+
+// attachPanel is the upload, which needs its own request: the stream only
+// goes one way, so bytes cannot travel up it, and fetch reports no upload
+// progress at all.
+templ attachPanel(t *Ticket) {
+	@card.New() {
+		@heading.New(heading.Level(2)) {
+			Attachments
+		}
+		if len(t.attachments) == 0 {
+			@text.New(text.Subtle, text.Small) {
+				Nothing attached.
+			}
+		} else {
+			@description.New() {
+				for _, a := range t.attachments {
+					@description.Term() {
+						{ a.Name }
+					}
+					@description.Detail() {
+						{ a.Type } · { humanSize(a.Size) }
+					}
+				}
+			}
+		}
+		<div class="mt-3 flex flex-col gap-2">
+			@fileupload.New(
+				shuttle.FileInput(ctx, fileupload.Attr, "attachments"),
+				fileupload.Multiple(),
+				fileupload.Accept("image/*,application/pdf,text/plain"),
+			)
+			// Driven entirely by the custom property shuttle sets on the
+			// input while bytes are moving - see the rule in input.css. No
+			// round trips, because the server does not know either.
+			@progress.New(progress.Value(0))
+		</div>
+		if t.uploadErr != nil {
+			@callout.New(callout.Danger) {
+				@callout.Text() {
+					{ t.uploadErr.Error() }
+				}
+			}
+		}
+	}
+}
+
+// thread is the comment history.
+//
+// The container is loom's timeline - a thread is a sequence of events, which
+// is what it is for - bound with shuttle.Container. That binding is what
+// makes a component usable as a stream target at all: the container has to
+// carry the patch target's id and data-ignore-morph, and a loom component
+// takes options rather than a string of attributes.
+//
+// data-ignore-morph is why the comments that arrive after this page opened
+// survive this component re-rendering around them.
+templ thread(t *Ticket) {
+	<div class="flex flex-col gap-3">
+		@heading.New(heading.Level(2)) {
+			Conversation
+		}
+		@timeline.New(shuttle.Container(t.Stream(streamComments), timeline.Attr)) {
+			for _, c := range t.thread {
+				@commentItem(t, c)
+			}
+		}
+	</div>
+}
+
+// commentItem renders one message.
+//
+// The id is not decoration: a streamed item must carry Stream.ItemID(key) or
+// shuttle refuses the patch, because the alternative is an item that can
+// never be replaced or removed afterwards. The initial thread renders with
+// the same ids as the streamed ones, so the two are indistinguishable
+// afterwards.
+templ commentItem(t *Ticket, c desk.Comment) {
+	@timeline.Item(timeline.ID(t.Stream(streamComments).ItemID(c.ID))) {
+		@timeline.Indicator()
+		@timeline.Content() {
+			<div class="flex items-center gap-2">
+				@text.Strong() {
+					{ t.authorName(c.AuthorID) }
+				}
+				if c.Internal {
+					@badge.New(badge.Amber, badge.Small) {
+						internal
+					}
+				}
+				@text.New(text.Subtle, text.Small) {
+					{ stamp(c.Posted) }
+				}
+			</div>
+			@text.New() {
+				{ c.Body }
+			}
+		}
+	}
+}
+
+// composer is the reply box.
+//
+// The draft is a signal, so keystrokes cost nothing: it lives on the client
+// and only travels when the post action asks for it.
+//
+// It does not clear itself after posting, and that is a property of the
+// design rather than an omission. Signals are declared with Datastar's
+// __ifmissing, so a re-render never overwrites one - which is exactly what
+// stops the server clobbering what somebody is halfway through typing, and
+// therefore also stops it emptying the box on purpose. Clearing is the
+// client's to do, which is what the Clear button does: shuttle.Ref names the
+// signal and shuttle.On writes a plain Datastar expression against it, with
+// no round trip and no action registered.
+templ composer(t *Ticket) {
+	<div class="flex flex-col gap-2">
+		@separator.New()
+		@textarea.New(
+			shuttle.ID(ctx, textarea.ID, "draft"),
+			shuttle.Bind(ctx, textarea.Attr, "draft"),
+			textarea.Rows(3),
+			textarea.Placeholder("Reply to the customer, or leave an internal note…"),
+		)
+		<div class="flex flex-wrap items-center gap-3">
+			@checkbox.New(
+				shuttle.ID(ctx, checkbox.ID, "internal"),
+				shuttle.Bind(ctx, checkbox.Attr, "internal"),
+				checkbox.Label("Internal note"),
+			)
+			<span class="flex-1"></span>
+			@button.New(
+				button.Subtle,
+				button.Small,
+				shuttle.On(button.Attr, "click", shuttle.Ref(ctx, "draft")+" = ''"),
+			) {
+				Clear
+			}
+			// A stable id, which is what keeps the morph patching this button
+			// rather than replacing it - and what gives a test something to
+			// click that is not "the third button".
+			@button.New(
+				button.Primary,
+				button.Small,
+				shuttle.ID(ctx, button.ID, "post"),
+				shuttle.OnClick(ctx, button.Attr, t.post),
+			) {
+				@icon.New(icon.PaperPlaneTilt, icon.Small)
+				Post
+			}
+		</div>
+	</div>
+}

@@ -1,0 +1,112 @@
+package ui
+
+import (
+	"github.com/pietjan/loom/avatar"
+	"github.com/pietjan/loom/badge"
+	"github.com/pietjan/loom/button"
+	"github.com/pietjan/loom/heading"
+	"github.com/pietjan/loom/icon"
+	"github.com/pietjan/loom/link"
+	"github.com/pietjan/loom/text"
+	"github.com/pietjan/shuttle"
+	"github.com/pietjan/shuttle-quickstart/internal/desk"
+)
+
+// queue is the list screen: a scope filter, then the table.
+templ queue(q *Queue) {
+	<div class="flex flex-col gap-6">
+		<div class="flex flex-wrap items-end justify-between gap-4">
+			<div>
+				@heading.New(heading.Level(1), heading.Large) {
+					Queue
+				}
+				@text.New(text.Subtle, text.Small) {
+					Sorting, filtering and paging happen in the store. The browser is
+					sent one page and never the set.
+				}
+			</div>
+			<div class="flex items-center gap-2">
+				@scopeButton(q, scopeAll, "All")
+				@scopeButton(q, scopeMine, "Mine")
+				@scopeButton(q, scopeUnassigned, "Unassigned")
+			</div>
+		</div>
+		@shuttle.Child(ctx, "table", func() shuttle.Component { return q.table })
+	</div>
+}
+
+// scopeButton narrows the list. The current one is filled rather than
+// outlined, which is the whole of the state this control has.
+templ scopeButton(q *Queue, scope, label string) {
+	@button.New(
+		scopeVariant(q.scope == scope),
+		button.Small,
+		shuttle.OnClick(ctx, button.Attr, q.setScope(scope)),
+	) {
+		{ label }
+	}
+}
+
+// refCell is the ticket's reference, in a tabular font so a column of them
+// lines up.
+templ refCell(t desk.Ticket) {
+	<span class="font-mono text-xs tabular-nums opacity-70">{ t.ID }</span>
+}
+
+// subjectCell is a real link to a path that really serves this ticket, so it
+// is copyable and middle-clickable - bound with click__prevent so an
+// ordinary click navigates inside the session instead of reloading the page.
+templ subjectCell(q *Queue, t desk.Ticket) {
+	@link.New(
+		"/desk/tickets/"+t.ID+"/",
+		shuttle.OnEvent(ctx, link.Attr, "click__prevent", q.open(t.ID)),
+	) {
+		// Wrapping rather than truncating: a subject is what an agent
+		// scans the queue by, and half of one is not a summary.
+		<span class="line-clamp-2">{ t.Subject }</span>
+	}
+}
+
+templ priorityCell(t desk.Ticket) {
+	@badge.New(priorityTone(t.Priority), badge.Small) {
+		{ t.Priority.Label() }
+	}
+}
+
+templ statusCell(t desk.Ticket) {
+	@badge.New(statusTone(t.Status), badge.Small) {
+		{ t.Status.Label() }
+	}
+}
+
+// assigneeCell shows who has it, or says plainly that nobody does.
+templ assigneeCell(q *Queue, t desk.Ticket) {
+	if agent, ok := q.assigneeOf(t); ok {
+		<span class="flex items-center gap-2">
+			@avatar.New(avatar.Small, avatar.Initials(agent.Initials()), avatar.Alt(agent.Name))
+			<span class="line-clamp-1 text-sm">{ agent.Name }</span>
+		</span>
+	} else {
+		@text.New(text.Subtle, text.Small) {
+			Unassigned
+		}
+	}
+}
+
+// actionCell is the row's verb.
+//
+// The closure it carries is registered against the table, because that is
+// whose render pass this runs in - so clicking re-renders the table and the
+// row updates in place.
+templ actionCell(q *Queue, t desk.Ticket) {
+	if t.Unassigned() {
+		@button.New(button.Primary, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.claim(t.ID))) {
+			@icon.New(icon.HandGrabbing, icon.ExtraSmall)
+			Claim
+		}
+	} else if t.Assignee == q.agent.ID {
+		@button.New(button.Subtle, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.release(t.ID))) {
+			Release
+		}
+	}
+}

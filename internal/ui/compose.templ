@@ -1,0 +1,124 @@
+package ui
+
+import (
+	"time"
+
+	"github.com/pietjan/loom/button"
+	"github.com/pietjan/loom/card"
+	"github.com/pietjan/loom/field"
+	"github.com/pietjan/loom/heading"
+	"github.com/pietjan/loom/icon"
+	"github.com/pietjan/loom/input"
+	"github.com/pietjan/loom/text"
+	"github.com/pietjan/loom/textarea"
+	"github.com/pietjan/shuttle"
+	"github.com/pietjan/shuttle-quickstart/internal/desk"
+)
+
+// compose is the new-ticket form.
+//
+// field.Root wires the label to the control, the description into
+// aria-describedby and the error into aria-invalid by itself, so the only
+// thing this template has to say is which message goes where - and
+// field.Error is a no-op on the empty string, which is why a validation
+// result can be passed through unconditionally.
+templ compose(c *Compose) {
+	{{ pending := shuttle.IndicatorRef(ctx, "filing") }}
+	<div class="flex max-w-2xl flex-col gap-6">
+		<div>
+			@heading.New(heading.Level(1), heading.Large) {
+				New ticket
+			}
+			@text.New(text.Subtle, text.Small) {
+				Validated as you type; committed on submit. Both run the same rules,
+				so passing one cannot mean something different from passing the other.
+			}
+		</div>
+		@card.New() {
+			<div class="flex flex-col gap-4">
+				@field.Root(field.Error(c.errors.For("subject")), field.Required()) {
+					@field.Label() {
+						Subject
+					}
+					@input.New(
+						// A stable id, because an id that changes per render
+						// means the element is replaced rather than morphed -
+						// which loses the typing, the focus and the caret.
+						shuttle.ID(ctx, input.ID, "subject"),
+						shuttle.Bind(ctx, input.Attr, "subject"),
+						// Rendering value= from committed state is not
+						// optional: the morph writes the attribute only when
+						// it differs, so omitting it would clear what was
+						// typed, and rendering something that moves would
+						// overwrite it mid-word.
+						input.Value(c.subject),
+						input.Placeholder("What is the customer reporting?"),
+						shuttle.OnChange(ctx, input.Attr, 300*time.Millisecond, c.validate),
+					)
+				}
+				@field.Root(field.Error(c.errors.For("customer")), field.Required()) {
+					@field.Label() {
+						Customer
+					}
+					@input.New(
+						shuttle.ID(ctx, input.ID, "customer"),
+						shuttle.Bind(ctx, input.Attr, "customer"),
+						input.Value(c.customer),
+						input.Placeholder("Which account?"),
+						shuttle.OnChange(ctx, input.Attr, 300*time.Millisecond, c.validate),
+					)
+				}
+				@field.Root(field.Error(c.errors.For("body"))) {
+					@field.Label() {
+						Details
+					}
+					@textarea.New(
+						shuttle.ID(ctx, textarea.ID, "body"),
+						shuttle.Bind(ctx, textarea.Attr, "body"),
+						// A textarea has no value attribute - the content is
+						// the element's text - so the morph compares the
+						// default value, which is that text and which typing
+						// never changes. Same rule as the input, reached by a
+						// different route.
+						textarea.Value(c.body),
+						textarea.Rows(5),
+						shuttle.OnChange(ctx, textarea.Attr, 400*time.Millisecond, c.validate),
+					)
+					@field.Description() {
+						Steps to reproduce, error messages, anything the next agent would ask for.
+					}
+				}
+				@field.Root() {
+					@field.Label() {
+						Priority
+					}
+					<span class="flex flex-wrap gap-1">
+						for _, p := range desk.Priorities {
+							@button.New(
+								scopeVariant(c.priority == p),
+								button.Tiny,
+								shuttle.OnClick(ctx, button.Attr, c.setPriority(p)),
+							) {
+								{ p.Label() }
+							}
+						}
+					</span>
+				}
+				<div class="flex items-center gap-3">
+					@button.New(
+						button.Primary,
+						shuttle.ID(ctx, button.ID, "file"),
+						shuttle.OnClick(ctx, button.Attr, c.submit, shuttle.Indicator("filing")),
+						button.Attr("data-attr:disabled", pending),
+					) {
+						@icon.New(icon.PaperPlaneTilt, icon.Small)
+						File ticket
+					}
+					@text.New(text.Subtle, text.Small, text.Attr("data-show", pending)) {
+						Filing…
+					}
+				</div>
+			</div>
+		}
+	</div>
+}

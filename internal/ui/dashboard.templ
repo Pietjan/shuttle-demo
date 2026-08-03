@@ -1,0 +1,95 @@
+package ui
+
+import (
+	"github.com/pietjan/loom/badge"
+	"github.com/pietjan/loom/card"
+	"github.com/pietjan/loom/chart"
+	"github.com/pietjan/loom/heading"
+	"github.com/pietjan/loom/icon"
+	"github.com/pietjan/loom/stat"
+	"github.com/pietjan/loom/text"
+	"github.com/pietjan/shuttle"
+	"github.com/pietjan/shuttle-quickstart/internal/desk"
+)
+
+// dashboard is the summary screen.
+templ dashboard(d *Dashboard) {
+	<div class="flex flex-col gap-8">
+		<div>
+			@heading.New(heading.Level(1), heading.Large) {
+				Dashboard
+			}
+			@text.New(text.Subtle, text.Small) {
+				The counts move when anybody works the queue — no polling, because
+				the stream is already open.
+			}
+		</div>
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			// The sparkline is the tile's background rather than a second
+			// element beside it, which is what stat.Background is for.
+			@stat.New(
+				stat.Label("Open"),
+				stat.Value(itoa(d.stats.Open)),
+				stat.Class("h-32"),
+				stat.Background(chart.New(
+					chart.Sparkline(), chart.Area(), chart.Smooth(), chart.Inset(0),
+					chart.Series("Opened", d.stats.Volume),
+				)),
+			) {
+				@badge.New(badge.Blue, badge.Small) {
+					live
+				}
+			}
+			@stat.New(stat.Label("Pending"), stat.Value(itoa(d.stats.Pending)), stat.Class("h-32"))
+			@stat.New(stat.Label("Unassigned"), stat.Value(itoa(d.stats.Unassigned)), stat.Class("h-32")) {
+				if d.stats.Unassigned > 0 {
+					@badge.New(badge.Amber, badge.Small) {
+						needs triage
+					}
+				}
+			}
+			@stat.New(stat.Label("Critical"), stat.Value(itoa(d.stats.Critical)), stat.Class("h-32")) {
+				if d.stats.Critical > 0 {
+					@badge.New(badge.Red, badge.Small) {
+						escalate
+					}
+				}
+			}
+		</div>
+		@card.New() {
+			// Server-rendered SVG. No client library, no hydration - the
+			// chart is markup by the time it reaches the browser.
+			@chart.New(
+				chart.Title("Tickets opened, last 7 days"),
+				chart.Labels(d.stats.Days...),
+				chart.Series("Opened", d.stats.Volume),
+				chart.Bars(),
+				chart.Ticks(4),
+			)
+		}
+		<div class="flex flex-col gap-3">
+			@heading.New(heading.Level(2)) {
+				Activity
+			}
+			@text.New(text.Subtle, text.Small) {
+				Scroll to the bottom and it asks for more. The first page is in the
+				document; every page after it is streamed into the browser an item
+				at a time and forgotten here.
+			}
+			@shuttle.Child(ctx, "activity", func() shuttle.Component { return d.feed })
+		</div>
+	</div>
+}
+
+// activityRow is one entry in the feed.
+templ activityRow(d *Dashboard, e desk.Event) {
+	<div class="flex items-center gap-3 border-b border-base-200 py-2 last:border-0 dark:border-base-800">
+		@icon.New(kindIcon(e.Kind), icon.Small)
+		<span class="flex-1 text-sm">
+			<span class="font-medium">{ d.actorName(e.ActorID) }</span>
+			<span class="opacity-70">{ e.Detail }</span>
+		</span>
+		<span class="font-mono text-xs tabular-nums opacity-60">{ e.TicketID }</span>
+		<span class="text-xs opacity-60">{ stamp(e.At) }</span>
+	</div>
+}
