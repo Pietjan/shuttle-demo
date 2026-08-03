@@ -56,7 +56,7 @@ templ queue(q *Queue) {
 							@button.New(button.Ghost, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.applyView(v))) {
 								{ v.Name }
 							}
-							@button.New(button.Ghost, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.deleteView(v.Name))) {
+							@button.New(button.Ghost, button.Tiny, button.Label("Delete saved view"), shuttle.OnClick(ctx, button.Attr, q.deleteView(v.Name))) {
 								@icon.New(icon.X, icon.ExtraSmall)
 							}
 						</span>

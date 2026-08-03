@@ -1,11 +1,14 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strconv"
 	"slices"
 	"strings"
 	"time"
+	texttpl "text/template"
 
 	"github.com/a-h/templ"
 
@@ -55,6 +58,54 @@ type Ticket struct {
 	notice    string
 
 	typing map[string]bool
+
+	cannedName    string
+	cannedPreview string
+}
+
+type cannedResponse struct {
+	Name  string
+	Body  string
+	Note  string
+}
+
+type cannedData struct {
+	Customer string
+	Agent    desk.Agent
+	Ticket   desk.Ticket
+}
+
+var cannedResponseCatalog = []cannedResponse{
+	{
+		Name: "Reassure",
+		Body: `Hi {{.Customer}},
+
+Thanks for the report about {{.Ticket.Subject}}. I’m checking it now and will update you shortly.
+
+Best,
+{{.Agent.Name}}`,
+		Note: "A short acknowledgement with the customer and subject filled in.",
+	},
+	{
+		Name: "Need more detail",
+		Body: `Hi {{.Customer}},
+
+I need one more detail to keep moving on {{.Ticket.ID}}. Could you send the latest screenshot or error message?
+
+Thanks,
+{{.Agent.Name}}`,
+		Note: "Asks for the missing information while naming the ticket.",
+	},
+	{
+		Name: "Progress update",
+		Body: `Hi {{.Customer}},
+
+We have made progress on {{.Ticket.Subject}} and I’m confirming the last step before I close this out.
+
+Best,
+{{.Agent.Name}}`,
+		Note: "Lets the customer know work is in flight.",
+	},
 }
 
 // TicketPresence is what a mounted ticket publishes to its per-ticket room.
@@ -124,6 +175,9 @@ func (t *Ticket) reload(ctx context.Context) error {
 		}
 	}
 	t.attachments, err = t.store.Attachments(ctx, t.id)
+	if t.cannedName == "" {
+		t.cannedPreview = ""
+	}
 	return err
 }
 
@@ -229,6 +283,8 @@ func (t *Ticket) post(ctx context.Context) error {
 		})
 		return nil
 	}
+	 t.cannedName = ""
+	 t.cannedPreview = ""
 
 	comment, err := t.store.AddComment(ctx, desk.Comment{
 		TicketID: t.id,
@@ -245,6 +301,31 @@ func (t *Ticket) post(ctx context.Context) error {
 		CommentID: comment.ID,
 		AuthorID:  t.agent.ID,
 	})
+}
+
+// cannedResponses expands the server-owned snippets for this ticket.
+func (t *Ticket) cannedResponses() []cannedResponse {
+	out := make([]cannedResponse, 0, len(cannedResponseCatalog))
+	for _, response := range cannedResponseCatalog {
+		body := expandCanned(response.Body, cannedData{Customer: t.ticket.Customer, Agent: t.agent, Ticket: t.ticket})
+		out = append(out, cannedResponse{Name: response.Name, Body: body, Note: response.Note})
+	}
+	return out
+}
+
+// selectCanned applies one canned response and records the expanded preview.
+func (t *Ticket) selectCanned(name string) shuttle.Action {
+	return func(context.Context) error {
+		for _, response := range t.cannedResponses() {
+			if response.Name != name {
+				continue
+			}
+			t.cannedName = response.Name
+			t.cannedPreview = response.Body
+			return nil
+		}
+		return nil
+	}
 }
 
 // typingState publishes whether this agent currently has a non-empty draft.
@@ -492,6 +573,24 @@ func (t *Ticket) typingSummary() string {
 	default:
 		return names[0] + " and others are typing..."
 	}
+}
+
+// cannedDraftExpr returns a JS string literal for the selected canned response.
+func cannedDraftExpr(body string) string {
+	return shuttle.Ref(context.Background(), "draft") + " = " + strconv.Quote(body)
+}
+
+// expandCanned renders a snippet using simple ticket/agent placeholders.
+func expandCanned(body string, data cannedData) string {
+	tpl, err := texttpl.New("canned").Parse(body)
+	if err != nil {
+		return body
+	}
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, data); err != nil {
+		return body
+	}
+	return buf.String()
 }
 
 // back returns to the queue.

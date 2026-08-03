@@ -233,6 +233,30 @@ func TestTicketStreamsComments(t *testing.T) {
 		NoDuplicateIDs()
 }
 
+func TestTicketCannedResponseExpandsAndPosts(t *testing.T) {
+	store := storeWith(t, desk.Ticket{Subject: "SSO login loops", Customer: "Northwind"})
+
+	tk := newTicket(store, agent, "T-1")
+	live := shuttle.Test(t, tk)
+
+	live.Click("#shuttle-c-canned-Reassure")
+	live.Assert().TextContains("body", "Preview: Reassure")
+
+	expected := "Hi Northwind,\n\nThanks for the report about SSO login loops. I’m checking it now and will update you shortly.\n\nBest,\nNadia Okafor"
+	live.Signal("draft", expected).Click("#shuttle-c-post")
+
+	comments, err := store.Comments(context.Background(), "T-1")
+	if err != nil {
+		t.Fatalf("Comments: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("stored %d comments, want 1", len(comments))
+	}
+	if comments[0].Body != expected {
+		t.Fatalf("comment body %q, want %q", comments[0].Body, expected)
+	}
+}
+
 func TestTicketHearsAnotherAgent(t *testing.T) {
 	store := storeWith(t, desk.Ticket{Subject: "Contested", Customer: "A"})
 

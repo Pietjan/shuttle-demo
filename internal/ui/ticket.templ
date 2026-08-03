@@ -41,6 +41,7 @@ templ ticketScreen(t *Ticket) {
 				<div class="flex flex-col gap-6">
 					@ticketBody(t)
 					@thread(t)
+					@cannedResponses(t)
 					@composer(t)
 				</div>
 				<div class="flex flex-col gap-6">
@@ -233,6 +234,51 @@ templ watchersPanel(t *Ticket) {
 				}
 			</ul>
 		}
+	}
+}
+
+templ cannedResponses(t *Ticket) {
+	@card.New() {
+		<div class="flex flex-col gap-3">
+			@heading.New(heading.Level(2)) {
+				Canned responses
+			}
+			@text.New(text.Subtle, text.Small) {
+				These are expanded on the server with the current customer, agent and ticket data.
+			}
+			<div class="flex flex-col gap-2">
+				for _, response := range t.cannedResponses() {
+					<div class="rounded-md border border-base-200 p-3 dark:border-base-800">
+						<div class="flex items-start justify-between gap-3">
+							<div class="flex flex-col gap-1">
+								@button.New(
+									button.Subtle,
+									button.Small,
+									shuttle.ID(ctx, button.ID, "canned-"+response.Name),
+									shuttle.OnClick(ctx, button.Attr, t.selectCanned(response.Name)),
+								) {
+									{ response.Name }
+								}
+								@text.New(text.Subtle, text.Small) {
+									{ response.Note }
+								}
+							</div>
+							<pre class="max-w-64 whitespace-pre-wrap text-right text-xs leading-5 opacity-70">{ response.Body }</pre>
+						</div>
+					</div>
+				}
+			</div>
+			if t.cannedPreview != "" {
+				<div class="rounded-md border border-base-200 bg-base-100 p-3 dark:border-base-800 dark:bg-base-900/40">
+					@heading.New(heading.Level(3)) {
+						Preview: { t.cannedName }
+					}
+					@text.New(text.Small) {
+						{ t.cannedPreview }
+					}
+				</div>
+			}
+		</div>
 	}
 }
 
