@@ -63,6 +63,7 @@ type Stats struct {
 	Critical   int
 	Breached   int
 	Escalated  int
+	MTTR       time.Duration
 
 	// Volume is tickets opened per day for the last 7 days, oldest first.
 	Volume []float64
@@ -339,6 +340,13 @@ func (m *Memory) SetStatus(ctx context.Context, ticketID string, s Status, actor
 func (m *Memory) SetStatusVersioned(_ context.Context, ticketID string, s Status, actorID string, expectedVersion int64) (Ticket, error) {
 	return m.update(ticketID, actorID, EventStatus, expectedVersion, func(t *Ticket) string {
 		t.Status = s
+		if s == StatusResolved {
+			if t.ResolvedAt.IsZero() {
+				t.ResolvedAt = m.now()
+			}
+		} else {
+			t.ResolvedAt = time.Time{}
+		}
 		return s.Label()
 	})
 }
@@ -552,6 +560,7 @@ func (m *Memory) Stats(_ context.Context) (Stats, error) {
 
 	var s Stats
 	now := m.now()
+	var resolvedDurations []time.Duration
 	for _, t := range m.tickets {
 		switch t.Status {
 		case StatusOpen:
@@ -573,6 +582,22 @@ func (m *Memory) Stats(_ context.Context) (Stats, error) {
 		if t.Status.Open() && !t.EscalatedAt.IsZero() {
 			s.Escalated++
 		}
+		if !t.Status.Open() {
+			resolvedAt := t.ResolvedAt
+			if resolvedAt.IsZero() && !t.Updated.IsZero() {
+				resolvedAt = t.Updated
+			}
+			if !resolvedAt.IsZero() && !t.Opened.IsZero() {
+				resolvedDurations = append(resolvedDurations, resolvedAt.Sub(t.Opened))
+			}
+		}
+	}
+	if len(resolvedDurations) > 0 {
+		var total time.Duration
+		for _, d := range resolvedDurations {
+			total += d
+		}
+		s.MTTR = total / time.Duration(len(resolvedDurations))
 	}
 
 	// Seven days of opened counts, oldest first.

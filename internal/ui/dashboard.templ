@@ -63,6 +63,7 @@ templ dashboard(d *Dashboard) {
 				}
 			}
 			@stat.New(stat.Label("Escalated"), stat.Value(itoa(d.stats.Escalated)), stat.Class("h-32"))
+			@stat.New(stat.Label("MTTR"), stat.Value(formatDuration(d.stats.MTTR)), stat.Class("h-32"))
 		</div>
 		@card.New() {
 			// Server-rendered SVG. No client library, no hydration - the

@@ -111,6 +111,19 @@ func humanSize(n int64) string {
 // reads as noise.
 func itoa(n int) string { return strconv.Itoa(n) }
 
+func formatDuration(d time.Duration) string {
+	if d <= 0 {
+		return "—"
+	}
+	if d < time.Hour {
+		return strconv.FormatInt(int64(d.Minutes()), 10) + "m"
+	}
+	if d < 24*time.Hour {
+		return strconv.FormatInt(int64(d.Hours()), 10) + "h"
+	}
+	return strconv.FormatInt(int64(d.Hours()/24), 10) + "d"
+}
+
 // navItemOptions builds a nav link's options: the action that navigates
 // without a page load, plus aria-current when it is the current one.
 //

@@ -131,6 +131,9 @@ type Ticket struct {
 	// FirstResponseAt is set when the first comment is posted.
 	FirstResponseAt time.Time
 
+	// ResolvedAt is when the ticket was marked resolved.
+	ResolvedAt time.Time
+
 	// EscalatedAt is set when the ticket breaches resolution SLA.
 	EscalatedAt time.Time
 }
