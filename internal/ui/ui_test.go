@@ -283,6 +283,39 @@ func TestTicketInsertIntoDraftFromCannedResponse(t *testing.T) {
 	}
 }
 
+func TestTicketResolveUsesVersionedWrite(t *testing.T) {
+	store := storeWith(t, desk.Ticket{Subject: "Needs closure", Customer: "A"})
+
+	tk := newTicket(store, agent, "T-1")
+	live := shuttle.Test(t, tk)
+
+	if _, err := store.SetStatus(context.Background(), "T-1", desk.StatusPending, other.ID); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+
+	if err := tk.resolve(context.Background()); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := live.Session().Push(context.Background()); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	live.Patches()
+
+	got, err := store.Ticket(context.Background(), "T-1")
+	if err != nil {
+		t.Fatalf("Ticket: %v", err)
+	}
+	if got.Status != desk.StatusPending {
+		t.Fatalf("status = %q, want %q", got.Status, desk.StatusPending)
+	}
+	if tk.notice == "" {
+		t.Fatal("resolve did not surface the conflict notice")
+	}
+	if !strings.Contains(live.HTML(), "Another agent changed this ticket first") {
+		t.Fatal("conflict notice did not render")
+	}
+}
+
 func TestTicketHearsAnotherAgent(t *testing.T) {
 	store := storeWith(t, desk.Ticket{Subject: "Contested", Customer: "A"})
 

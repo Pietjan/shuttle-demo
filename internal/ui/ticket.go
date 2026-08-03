@@ -415,7 +415,7 @@ func (t *Ticket) setPriority(p desk.Priority) shuttle.Action {
 func (t *Ticket) resolve(ctx context.Context) error {
 	time.Sleep(900 * time.Millisecond)
 	return t.mutate(ctx, desk.EventStatus, func(ctx context.Context) (desk.Ticket, string, error) {
-		ticket, err := t.store.SetStatus(ctx, t.id, desk.StatusResolved, t.agent.ID)
+		ticket, err := t.store.SetStatusVersioned(ctx, t.id, desk.StatusResolved, t.agent.ID, t.ticket.Version)
 		return ticket, t.agent.Name + " resolved " + t.id, err
 	})
 }
