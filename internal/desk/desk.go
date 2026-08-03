@@ -256,3 +256,12 @@ type Event struct {
 	Detail   string
 	At       time.Time
 }
+
+// QueueView is a saved queue configuration for one agent.
+type QueueView struct {
+	Name  string
+	Scope string
+	Query string
+	Sort  string
+	Desc  bool
+}

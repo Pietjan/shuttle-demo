@@ -102,6 +102,10 @@ type Store interface {
 
 	Events(ctx context.Context, offset, limit int) (Page[Event], error)
 	Stats(ctx context.Context) (Stats, error)
+
+	QueueViews(ctx context.Context, agentID string) ([]QueueView, error)
+	SaveQueueView(ctx context.Context, agentID string, view QueueView) error
+	DeleteQueueView(ctx context.Context, agentID, name string) error
 }
 
 // Memory is an in-memory Store, safe for concurrent use.
@@ -124,6 +128,7 @@ type Memory struct {
 	attachments map[string][]Attachment
 	agents      []Agent
 	events      []Event
+	queueViews  map[string][]QueueView
 
 	// now is the clock, injectable so tests are not timing-dependent.
 	now func() time.Time
@@ -144,6 +149,7 @@ func NewMemory() *Memory {
 	return &Memory{
 		comments:    map[string][]Comment{},
 		attachments: map[string][]Attachment{},
+		queueViews:  map[string][]QueueView{},
 		seq:         map[string]int{},
 		now:         time.Now,
 	}
@@ -584,6 +590,58 @@ func (m *Memory) Stats(_ context.Context) (Stats, error) {
 		}
 	}
 	return s, nil
+}
+
+// QueueViews returns saved views for one agent.
+func (m *Memory) QueueViews(_ context.Context, agentID string) ([]QueueView, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	views := m.queueViews[agentID]
+	out := make([]QueueView, len(views))
+	copy(out, views)
+	return out, nil
+}
+
+// SaveQueueView upserts one saved queue view for an agent.
+func (m *Memory) SaveQueueView(_ context.Context, agentID string, view QueueView) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	name := strings.TrimSpace(view.Name)
+	if name == "" {
+		return errors.New("desk: queue view name is required")
+	}
+	view.Name = name
+
+	views := m.queueViews[agentID]
+	for i := range views {
+		if views[i].Name != name {
+			continue
+		}
+		views[i] = view
+		m.queueViews[agentID] = views
+		return nil
+	}
+
+	m.queueViews[agentID] = append(views, view)
+	return nil
+}
+
+// DeleteQueueView removes one saved queue view by name.
+func (m *Memory) DeleteQueueView(_ context.Context, agentID, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	views := m.queueViews[agentID]
+	for i := range views {
+		if views[i].Name != name {
+			continue
+		}
+		m.queueViews[agentID] = append(views[:i], views[i+1:]...)
+		return nil
+	}
+	return fmt.Errorf("%w: queue view %s", ErrNotFound, name)
 }
 
 // applyEscalationsLocked raises open tickets that have breached resolution

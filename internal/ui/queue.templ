@@ -6,6 +6,7 @@ import (
 	"github.com/pietjan/loom/button"
 	"github.com/pietjan/loom/heading"
 	"github.com/pietjan/loom/icon"
+	"github.com/pietjan/loom/input"
 	"github.com/pietjan/loom/link"
 	"github.com/pietjan/loom/text"
 	"github.com/pietjan/shuttle"
@@ -30,6 +31,38 @@ templ queue(q *Queue) {
 				@scopeButton(q, scopeMine, "Mine")
 				@scopeButton(q, scopeUnassigned, "Unassigned")
 			</div>
+		</div>
+		<div class="flex flex-col gap-3 rounded-md border border-base-200 p-3 dark:border-base-800">
+			<div class="flex flex-wrap items-center gap-2">
+				@input.New(
+					input.Small,
+					input.Attr("class", "max-w-64"),
+					input.Placeholder("Save current view as..."),
+					shuttle.ID(ctx, input.ID, "save-view"),
+					shuttle.Bind(ctx, input.Attr, "save_view_name"),
+				)
+				@button.New(button.Subtle, button.Small, shuttle.OnClick(ctx, button.Attr, q.saveView)) {
+					Save view
+				}
+			</div>
+			if len(q.views) == 0 {
+				@text.New(text.Subtle, text.Small) {
+					No saved views yet.
+				}
+			} else {
+				<div class="flex flex-wrap items-center gap-2">
+					for _, v := range q.views {
+						<span class="inline-flex items-center gap-1 rounded-md border border-base-200 px-2 py-1 text-xs dark:border-base-700">
+							@button.New(button.Ghost, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.applyView(v))) {
+								{ v.Name }
+							}
+							@button.New(button.Ghost, button.Tiny, shuttle.OnClick(ctx, button.Attr, q.deleteView(v.Name))) {
+								@icon.New(icon.X, icon.ExtraSmall)
+							}
+						</span>
+					}
+				</div>
+			}
 		</div>
 		@shuttle.Child(ctx, "table", func() shuttle.Component { return q.table })
 	</div>

@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"net/url"
+	"sort"
+	"strings"
 
 	"github.com/a-h/templ"
 
@@ -36,6 +38,7 @@ type Queue struct {
 
 	table *live.Table[desk.Ticket]
 	scope string
+	views []desk.QueueView
 }
 
 func newQueue(store desk.Store, agent desk.Agent) *Queue {
@@ -53,8 +56,16 @@ func newQueue(store desk.Store, agent desk.Agent) *Queue {
 
 // Mount subscribes to the queue topic, so a claim in somebody else's window
 // reaches this list.
-func (q *Queue) Mount(context.Context, shuttle.Params) error {
-	return q.Subscribe(desk.TopicQueue)
+func (q *Queue) Mount(ctx context.Context, _ shuttle.Params) error {
+	if err := q.Subscribe(desk.TopicQueue); err != nil {
+		return err
+	}
+	return q.loadViews(ctx)
+}
+
+// Signals holds client state for the save-view form.
+func (q *Queue) Signals() map[string]any {
+	return map[string]any{"save_view_name": ""}
 }
 
 // HandleParams reads the scope out of the URL.
@@ -87,6 +98,18 @@ func (q *Queue) HandleInfo(ctx context.Context, msg any) error {
 		return nil
 	}
 	return q.reload(ctx)
+}
+
+func (q *Queue) loadViews(ctx context.Context) error {
+	views, err := q.store.QueueViews(ctx, q.agent.ID)
+	if err != nil {
+		return err
+	}
+	sort.SliceStable(views, func(i, j int) bool {
+		return strings.ToLower(views[i].Name) < strings.ToLower(views[j].Name)
+	})
+	q.views = views
+	return nil
 }
 
 // load is the table's data source: one page, never the set.
@@ -156,6 +179,65 @@ func (q *Queue) setScope(scope string) shuttle.Action {
 		// Replace rather than Navigate: a view somebody is still adjusting
 		// should not put one entry in the back button per click.
 		return q.Replace(ctx, "/desk/queue/?"+values.Encode())
+	}
+}
+
+// saveView stores the current queue view under a name.
+func (q *Queue) saveView(ctx context.Context) error {
+	var form struct {
+		Name string `json:"save_view_name"`
+	}
+	if err := shuttle.DecodeSignals(ctx, &form); err != nil {
+		return err
+	}
+
+	name := strings.TrimSpace(form.Name)
+	if name == "" {
+		return nil
+	}
+
+	view := desk.QueueView{
+		Name:  name,
+		Scope: q.scope,
+	}
+	params := q.table.QueryParams()
+	view.Query = params.Get("q")
+	view.Sort = params.Get("sort")
+	view.Desc = strings.EqualFold(params.Get("dir"), "desc")
+	if err := q.store.SaveQueueView(ctx, q.agent.ID, view); err != nil {
+		return err
+	}
+	return q.loadViews(ctx)
+}
+
+// applyView replaces the current URL with the saved queue view state.
+func (q *Queue) applyView(view desk.QueueView) shuttle.Action {
+	return func(ctx context.Context) error {
+		q.scope = view.Scope
+		values := url.Values{}
+		if view.Scope != scopeAll {
+			values.Set("scope", view.Scope)
+		}
+		if view.Query != "" {
+			values.Set("q", view.Query)
+		}
+		if view.Sort != "" {
+			values.Set("sort", view.Sort)
+		}
+		if view.Desc {
+			values.Set("dir", "desc")
+		}
+		return q.Replace(ctx, "/desk/queue/?"+values.Encode())
+	}
+}
+
+// deleteView removes one saved queue view.
+func (q *Queue) deleteView(name string) shuttle.Action {
+	return func(ctx context.Context) error {
+		if err := q.store.DeleteQueueView(ctx, q.agent.ID, name); err != nil {
+			return err
+		}
+		return q.loadViews(ctx)
 	}
 }
 

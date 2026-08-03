@@ -230,6 +230,42 @@ func TestAutoAssignRoundRobin(t *testing.T) {
 	}
 }
 
+func TestQueueViewsCRUD(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := desk.NewMemory()
+
+	if err := store.SaveQueueView(ctx, "a-nadia", desk.QueueView{Name: "Mine high", Scope: "mine", Query: "", Sort: "priority", Desc: true}); err != nil {
+		t.Fatalf("SaveQueueView first: %v", err)
+	}
+	if err := store.SaveQueueView(ctx, "a-nadia", desk.QueueView{Name: "Mine high", Scope: "mine", Query: "billing", Sort: "priority", Desc: true}); err != nil {
+		t.Fatalf("SaveQueueView upsert: %v", err)
+	}
+
+	views, err := store.QueueViews(ctx, "a-nadia")
+	if err != nil {
+		t.Fatalf("QueueViews: %v", err)
+	}
+	if len(views) != 1 {
+		t.Fatalf("saved views = %d, want 1", len(views))
+	}
+	if views[0].Query != "billing" {
+		t.Fatalf("view query = %q, want billing", views[0].Query)
+	}
+
+	if err := store.DeleteQueueView(ctx, "a-nadia", "Mine high"); err != nil {
+		t.Fatalf("DeleteQueueView: %v", err)
+	}
+	views, err = store.QueueViews(ctx, "a-nadia")
+	if err != nil {
+		t.Fatalf("QueueViews after delete: %v", err)
+	}
+	if len(views) != 0 {
+		t.Fatalf("saved views after delete = %d, want 0", len(views))
+	}
+}
+
 func TestTicketNotFound(t *testing.T) {
 	t.Parallel()
 
