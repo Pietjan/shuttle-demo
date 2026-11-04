@@ -5,6 +5,8 @@ ARG ALPINE_TAG=3.22
 
 FROM alpine:${ALPINE_TAG} AS builder
 
+ARG BINARY_NAME=deskline-linux-arm64
+
 # scratch has no /etc/passwd, so a numeric USER in the final stage would run
 # as a uid with no name behind it. These two files are the whole of what it
 # takes to have one.
@@ -13,7 +15,7 @@ RUN printf 'nobody:x:65534:65534:nobody:/home/app:/sbin/nologin\n' > /tmp/passwd
 	&& apk add --no-cache ca-certificates \
 	&& mkdir -p /tmp/home/app
 
-COPY bin/deskline-linux-amd64 /tmp/app
+COPY bin/${BINARY_NAME} /tmp/app
 
 FROM scratch
 

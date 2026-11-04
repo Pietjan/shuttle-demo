@@ -110,10 +110,15 @@ build: generate css
 # CGO off and static, because the image it goes into is scratch: there is no
 # libc in there to dynamically link against, and the failure is at startup
 # rather than at build time.
-.PHONY: build/linux
-build/linux: generate css
+.PHONY: build/linux-amd64
+build/linux-amd64: generate css
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
 		go build -ldflags='-s -w' -o=bin/$(binary_name)-linux-amd64 $(main_package_path)
+
+.PHONY: build/linux-arm64
+build/linux-arm64: generate css
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+		go build -ldflags='-s -w' -o=bin/$(binary_name)-linux-arm64 $(main_package_path)
 
 ## run: run the application on $(addr)
 .PHONY: run
@@ -145,8 +150,8 @@ run/live:
 # an artefact instead of carrying a Go toolchain. Everything the app serves -
 # the stylesheet included - is embedded in it, so nothing else has to ship.
 .PHONY: docker/build
-docker/build: build/linux
-	docker build -t $(binary_name):latest .
+docker/build: build/linux-arm64
+	docker build --platform linux/arm64 --build-arg BINARY_NAME=$(binary_name)-linux-arm64 -t $(binary_name):latest .
 
 ## push: audit, then push to the tracking branch
 .PHONY: push
